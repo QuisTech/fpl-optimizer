@@ -77,15 +77,15 @@ export const MetricsColumn = ({ data, syncedData, riskMode }: MetricsColumnProps
           </div>
           <div className="flex justify-between items-center text-[11px]">
             <span className="text-slate-400">Objective Math</span>
-            <span className="font-bold text-white">Max Total xP</span>
+            <span className="font-bold text-white">Form + xG/xA Heuristic</span>
           </div>
           <div className="flex justify-between items-center text-[11px]">
             <span className="text-slate-400">Ownership Bias</span>
-            <span className="font-bold text-white">Template Boost (Max +75%)</span>
+            <span className="font-bold text-white">Differential Boost (+25%)</span>
           </div>
           <div className="flex justify-between items-center text-[11px]">
-            <span className="text-slate-400">Squad Limits</span>
-            <span className="font-bold text-white">Max 3 Per Team</span>
+            <span className="text-slate-400">Premium Boost</span>
+            <span className="font-bold text-white">Captaincy Bias (+8-15%)</span>
           </div>
         </div>
       </div>
