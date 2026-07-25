@@ -167,6 +167,13 @@ export class FPLService {
     const others = squad.filter(p => !lockedIds.has(p.id)).sort(sortByScore);
     const startingXI = [...mandatory, ...others.slice(0, 11 - mandatory.length)].filter(Boolean) as ScoredPlayer[];
     
+    // Captaincy Strategy: Heavily favor Attackers (MID/FWD) over DEF/GKP due to higher point ceilings
+    const captaincyCandidates = [...startingXI].sort((a, b) => {
+      const aWeight = (a.position === 'MID' || a.position === 'FWD') ? 1.5 : 1.0;
+      const bWeight = (b.position === 'MID' || b.position === 'FWD') ? 1.5 : 1.0;
+      return ((b.xP || 0) * bWeight) - ((a.xP || 0) * aWeight);
+    });
+    
     return { 
       squad, startingXI, 
       bench: squad.filter(p => !startingXI.find(x => x.id === p.id)).sort((a, b) => {
@@ -174,8 +181,8 @@ export class FPLService {
         if (a.position !== 'GKP' && b.position === 'GKP') return 1;
         return (b.score || 0) - (a.score || 0);
       }),
-      captain: startingXI.sort(sortByScore)[0] || null,
-      viceCaptain: startingXI.sort(sortByScore)[1] || null,
+      captain: captaincyCandidates[0] || null,
+      viceCaptain: captaincyCandidates[1] || null,
       expectedPoints: startingXI.reduce((sum, p) => sum + (p.xP || 0), 0),
       totalCost: squad.reduce((sum, p) => sum + (p.now_cost || 0), 0),
       topPicks: {
