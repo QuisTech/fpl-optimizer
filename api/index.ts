@@ -150,7 +150,10 @@ export class FPLService {
       return mapped;
     });
 
-    const optimalIds = solveOptimalSquad(oracle, nextEventId, budget, 8, riskMode);
+    const playerScores = new Map<number, number>();
+    scored.forEach(p => playerScores.set(p.id, p.score));
+
+    const optimalIds = solveOptimalSquad(oracle, nextEventId, budget, 8, riskMode, playerScores);
     const squad = scored.filter(p => optimalIds.includes(p.id));
     
     const sortByScore = (a: ScoredPlayer, b: ScoredPlayer) => (b.score || 0) - (a.score || 0);

@@ -9,7 +9,7 @@ interface LPSolverModel {
   ints: Record<string, 1>;
 }
 
-export function solveOptimalSquad(oracle: XPOracle, gameweek: number, budget: number, horizon: number = 8, riskMode: string = 'safe'): number[] {
+export function solveOptimalSquad(oracle: XPOracle, gameweek: number, budget: number, horizon: number = 8, riskMode: string = 'safe', playerScores?: Map<number, number>): number[] {
   const allIds = oracle.getAllPlayerIds();
   
   const model: LPSolverModel = {
@@ -38,34 +38,40 @@ export function solveOptimalSquad(oracle: XPOracle, gameweek: number, budget: nu
     
     // Sum expected points over the lookahead horizon
     let score = 0;
-    for (let i = 0; i < horizon; i++) {
-      score += oracle.getXP(id, gameweek + i);
-    }
-    
-    // Add deterministic tie-breaker to prevent search explosion in branch-and-bound LP solver
-    if (score > 0 && riskMode === 'value') {
-      score += (id % 10000) * 1e-4;
+    if (playerScores && playerScores.has(id)) {
+      score = playerScores.get(id)!;
+    } else {
+      for (let i = 0; i < horizon; i++) {
+        score += oracle.getXP(id, gameweek + i);
+      }
     }
     
     const cost = oracle.getCost(id);
 
-    // Apply EO/Risk utility adjustments to the LP objective score
-    if (score > 0 && riskMode !== 'value') {
-      // 1. Premium Captaincy Protection
-      const costInMillions = cost / 10;
-      if (costInMillions >= 10.0) {
-        score *= 1.15;
-      } else if (costInMillions >= 8.0) {
-        score *= 1.08;
+    if (!playerScores || !playerScores.has(id)) {
+      // Add deterministic tie-breaker to prevent search explosion in branch-and-bound LP solver
+      if (score > 0 && riskMode === 'value') {
+        score += (id % 10000) * 1e-4;
       }
+      
+      // Apply EO/Risk utility adjustments to the LP objective score
+      if (score > 0 && riskMode !== 'value') {
+        // 1. Premium Captaincy Protection
+        const costInMillions = cost / 10;
+        if (costInMillions >= 10.0) {
+          score *= 1.15;
+        } else if (costInMillions >= 8.0) {
+          score *= 1.08;
+        }
 
-      // 2. Smooth EO Sentiment scaling
-      if (riskMode === 'safe') {
-        const eo = oracle.getTop1kEO?.(id) ?? 0;
-        score *= (1 + 0.15 * (eo / 100));
-      } else if (riskMode === 'aggressive') {
-        const eo = oracle.getTop1kEO?.(id) ?? 0;
-        score *= (1 + 0.25 * (1 - eo / 100));
+        // 2. Smooth EO Sentiment scaling
+        if (riskMode === 'safe') {
+          const eo = oracle.getTop1kEO?.(id) ?? 0;
+          score *= (1 + 0.15 * (eo / 100));
+        } else if (riskMode === 'aggressive') {
+          const eo = oracle.getTop1kEO?.(id) ?? 0;
+          score *= (1 + 0.25 * (1 - eo / 100));
+        }
       }
     }
 
