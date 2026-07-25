@@ -62,6 +62,33 @@ export const MetricsColumn = ({ data, syncedData, riskMode }: MetricsColumnProps
           </div>
         </div>
       </div>
+
+      {/* Engine Diagnostics Card */}
+      <div className="bg-card-bg border border-fpl-border rounded-3xl p-5 shadow-sm">
+        <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Engine Diagnostics</h2>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center text-[11px]">
+            <span className="text-slate-400">Engine</span>
+            <span className="font-bold text-white">LP Solver Optimal</span>
+          </div>
+          <div className="flex justify-between items-center text-[11px]">
+            <span className="text-slate-400">Constraint: Budget</span>
+            <span className="font-bold text-fpl-green">£100.0M / £100.0M</span>
+          </div>
+          <div className="flex justify-between items-center text-[11px]">
+            <span className="text-slate-400">Objective Math</span>
+            <span className="font-bold text-white">Max Total xP</span>
+          </div>
+          <div className="flex justify-between items-center text-[11px]">
+            <span className="text-slate-400">Ownership Bias</span>
+            <span className="font-bold text-white">Template Boost (Max +75%)</span>
+          </div>
+          <div className="flex justify-between items-center text-[11px]">
+            <span className="text-slate-400">Squad Limits</span>
+            <span className="font-bold text-white">Max 3 Per Team</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -29,8 +29,8 @@ export const FPLTeamSchema = z.object({
   id: z.number(),
   name: z.string(),
   short_name: z.string(),
-  strength: z.number(),
-});
+  strength: z.number().nullish().default(3),
+}).passthrough();
 
 export const FPLFixtureSchema = z.object({
   id: z.number(),
