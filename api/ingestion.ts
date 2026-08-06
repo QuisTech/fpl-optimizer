@@ -114,14 +114,31 @@ export class CSVOracle implements XPOracle {
         let fplId = syntheticId++; 
         let rawOwnership = 100.0; // default safe value
         let realTeamId = 0;
+        let matchTeamId = 0;
         if (players.length > 0) {
-          const match = players.find(p => 
-            p.web_name?.toLowerCase() === playerName.toLowerCase() ||
-            p.second_name?.toLowerCase().includes(playerName.toLowerCase()) ||
-            playerName.toLowerCase().includes(p.second_name?.toLowerCase()) ||
-            playerName.toLowerCase().includes(p.web_name?.toLowerCase())
+          const expectedTeamId = teamMap[team.toLowerCase()];
+          const expectedElementType = pos === 'GKP' ? 1 : pos === 'DEF' ? 2 : pos === 'MID' ? 3 : pos === 'FWD' ? 4 : 0;
+          
+          let match = players.find(p => 
+            p.team === expectedTeamId &&
+            p.element_type === expectedElementType &&
+            (p.web_name?.toLowerCase() === playerName.toLowerCase() ||
+             p.second_name?.toLowerCase().includes(playerName.toLowerCase()) ||
+             playerName.toLowerCase().includes(p.second_name?.toLowerCase()) ||
+             playerName.toLowerCase().includes(p.web_name?.toLowerCase()))
           );
+
+          if (!match) {
+            match = players.find(p => 
+              p.element_type === expectedElementType &&
+              (p.web_name?.toLowerCase() === playerName.toLowerCase() ||
+               p.second_name?.toLowerCase().includes(playerName.toLowerCase()) ||
+               playerName.toLowerCase().includes(p.second_name?.toLowerCase()) ||
+               playerName.toLowerCase().includes(p.web_name?.toLowerCase()))
+            );
+          }
           if (match) {
+            matchTeamId = match.team;
             fplId = match.id;
             rawOwnership = parseFloat(match.selected_by_percent) || 100.0;
             realTeamId = match.team;
@@ -129,15 +146,26 @@ export class CSVOracle implements XPOracle {
           }
         }
         
+        if (this.xpMatrix[fplId]) {
+          // This FPL ID was already matched by an earlier CSV row (which is higher ranked).
+          // Do not overwrite it. Treat this new row as an unmatched player.
+          fplId = syntheticId++;
+        }
+
         const teamId = teamMap[team.toLowerCase()] || realTeamId || 0;
 
         const adjustedMerit = meritScore;
 
-        this.playerNames[fplId] = playerName;
-        this.playerPositions[fplId] = pos;
-        this.playerCosts[fplId] = cost;
-        this.playerTeams[fplId] = team;
-        this.allIds.push(fplId);
+        if (!this.playerPositions[fplId] || matchTeamId === teamId) {
+          this.playerNames[fplId] = playerName;
+          this.playerPositions[fplId] = pos;
+          this.playerCosts[fplId] = cost;
+          this.playerTeams[fplId] = team;
+        }
+        
+        if (!this.allIds.includes(fplId)) {
+          this.allIds.push(fplId);
+        }
         
         // Calculate P(play) from cols[8] (Prob. of Appearing) or FPL metadata
         let probPlay = parseFloat(cols[8]);
