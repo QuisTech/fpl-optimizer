@@ -36,9 +36,9 @@ export function solveOptimalSquad(oracle: XPOracle, gameweek: number, budget: nu
     const v = `p_${id}`;
     const pos = oracle.getPosition(id).toLowerCase(); // "gkp", "def", "mid", "fwd"
     
-    // Sum expected points over the lookahead horizon
     let score = 0;
-    if (playerScores && playerScores.has(id)) {
+    if (playerScores) {
+      if (!playerScores.has(id)) return; // Skip players filtered out (e.g. injured/unavailable)
       score = playerScores.get(id)!;
     } else {
       for (let i = 0; i < horizon; i++) {
