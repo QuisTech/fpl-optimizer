@@ -103,9 +103,6 @@ export class FPLService {
     score *= difficultyMultiplier;
 
     if (riskMode !== 'value') {
-      if (riskMode === 'aggressive' && player.selected_by_percent && parseFloat(player.selected_by_percent) < 5) {
-        score *= 1.25;
-      }
 
       // Premium player protection (captaincy value)
       // Elite assets are worth more than their PPM suggests because you captain them
@@ -147,6 +144,21 @@ export class FPLService {
       mapped.xP = oracle.getXP(p.id, nextEventId);
       mapped.eo = oracle.getTop1kEO?.(p.id) ?? 0;
       mapped.ownership = oracle.getTop1kOwnership?.(p.id) ?? parseFloat(p.selected_by_percent || "0") ?? 0;
+      
+      // Apply risk mode utilities exactly as described in the UI Engine Diagnostics
+      if (mapped.score > 0) {
+        if (riskMode === 'value') {
+          // Deterministic tie-breaker for branch-and-bound solver efficiency
+          mapped.score += (p.id % 10000) * 1e-4;
+        } else if (riskMode === 'safe') {
+          // Positive sentiment scaling: boost highly owned players
+          mapped.score *= (1 + 0.15 * (mapped.eo / 100));
+        } else if (riskMode === 'aggressive') {
+          // Differential scaling: massive boost to low ownership players
+          mapped.score *= (1 + 0.25 * (1 - mapped.eo / 100));
+        }
+      }
+      
       return mapped;
     });
 
