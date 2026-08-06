@@ -83,7 +83,7 @@ export class FPLService {
     return result;
   }
 
-  static calculatePlayerScore(player: FPLPlayer, fixtures: FPLFixture[], nextEventId: number, riskMode: string): number {
+  static calculatePlayerScore(player: FPLPlayer, fixtures: FPLFixture[], nextEventId: number, riskMode: string, oracle?: CSVOracle): number {
     let score = player.total_points / (player.now_cost / 10);
     const form = parseFloat(player.form) || 0;
     score += form * 2;
@@ -108,9 +108,13 @@ export class FPLService {
       if (costInMillions >= 10.0) score *= 1.15;
       else if (costInMillions >= 8.0) score *= 1.08;
 
+      // Smart Template Protection: Use Top 1k EO if available (post-GW1), else fallback to Global Ownership (pre-season)
+      const eo = oracle?.getTop1kEO?.(player.id) ?? 0;
+      const globalOwnership = parseFloat(player.selected_by_percent || "0");
+      const reliableOwnership = eo > 0 ? eo : globalOwnership;
+      
       // Heavy template protection (boost high ownership players)
-      const ownership = parseFloat(player.selected_by_percent || "0");
-      score *= (1 + 0.01 * ownership);
+      score *= (1 + 0.01 * reliableOwnership);
     } 
     else if (riskMode === 'aggressive') {
       // Premium player protection
@@ -118,8 +122,13 @@ export class FPLService {
       if (costInMillions >= 10.0) score *= 1.15;
       else if (costInMillions >= 8.0) score *= 1.08;
 
+      // Smart Differential Boost: Use Top 1k EO if available, else fallback to Global Ownership
+      const eo = oracle?.getTop1kEO?.(player.id) ?? 0;
+      const globalOwnership = parseFloat(player.selected_by_percent || "0");
+      const reliableOwnership = eo > 0 ? eo : globalOwnership;
+
       // Differential Boost (+25%) for < 5% ownership (Restored to the exact logic the user praised)
-      if (player.selected_by_percent && parseFloat(player.selected_by_percent) < 5) {
+      if (reliableOwnership < 5) {
         score *= 1.25;
       }
     }
@@ -132,7 +141,7 @@ export class FPLService {
     return score;
   }
 
-  static mapToScoredPlayer(p: FPLPlayer, teams: FPLTeam[], fixtures: FPLFixture[], nextEventId: number, riskMode: string): ScoredPlayer {
+  static mapToScoredPlayer(p: FPLPlayer, teams: FPLTeam[], fixtures: FPLFixture[], nextEventId: number, riskMode: string, oracle?: CSVOracle): ScoredPlayer {
     const posMap: Record<number, string> = { 1: "GKP", 2: "DEF", 3: "MID", 4: "FWD" };
     const position = posMap[p.element_type] || "MID";
     const team = teams.find(t => t.id === p.team);
@@ -142,7 +151,7 @@ export class FPLService {
       position,
       team_name: team?.name || "Unknown",
       team_short_name: team?.short_name || "UNK",
-      score: this.calculatePlayerScore(p, fixtures, nextEventId, riskMode),
+      score: this.calculatePlayerScore(p, fixtures, nextEventId, riskMode, oracle),
       xP: 0,
       ppm: (p.total_points || 0) / (p.now_cost / 10),
       next_fixtures: [],
@@ -158,7 +167,7 @@ export class FPLService {
 
     const available = players.filter(p => p.status === 'a' || p.chance_of_playing_next_round === 100);
     const scored = available.map(p => {
-      const mapped = this.mapToScoredPlayer(p, teams, fixtures, nextEventId, riskMode);
+      const mapped = this.mapToScoredPlayer(p, teams, fixtures, nextEventId, riskMode, oracle);
       mapped.xP = oracle.getXP(p.id, nextEventId);
       mapped.eo = oracle.getTop1kEO?.(p.id) ?? 0;
       mapped.ownership = oracle.getTop1kOwnership?.(p.id) ?? parseFloat(p.selected_by_percent || "0") ?? 0;
