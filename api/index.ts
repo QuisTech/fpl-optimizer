@@ -162,10 +162,32 @@ export class FPLService {
     const mids = squad.filter(p => p.position === "MID").sort(sortByScore);
     const fwds = squad.filter(p => p.position === "FWD").sort(sortByScore);
     
-    const mandatory = [gkps[0], ...defs.slice(0, 3), ...mids.slice(0, 2), ...fwds.slice(0, 1)].filter(Boolean) as ScoredPlayer[];
-    const lockedIds = new Set(mandatory.map(p => p.id));
-    const others = squad.filter(p => !lockedIds.has(p.id)).sort(sortByScore);
-    const startingXI = [...mandatory, ...others.slice(0, 11 - mandatory.length)].filter(Boolean) as ScoredPlayer[];
+    // Find the best valid formation by enumerating all legal FPL formations
+    // Valid: 3-5 DEF, 2-5 MID, 1-3 FWD, exactly 1 GKP, total 11
+    let bestXI: ScoredPlayer[] = [];
+    let bestXIScore = -Infinity;
+    
+    for (let nDef = 3; nDef <= Math.min(5, defs.length); nDef++) {
+      for (let nMid = 2; nMid <= Math.min(5, mids.length); nMid++) {
+        const nFwd = 10 - nDef - nMid; // 10 outfield slots
+        if (nFwd < 1 || nFwd > 3 || nFwd > fwds.length) continue;
+        
+        const candidate = [
+          gkps[0],
+          ...defs.slice(0, nDef),
+          ...mids.slice(0, nMid),
+          ...fwds.slice(0, nFwd)
+        ].filter(Boolean) as ScoredPlayer[];
+        
+        const totalScore = candidate.reduce((sum, p) => sum + (p.score || 0), 0);
+        if (totalScore > bestXIScore) {
+          bestXIScore = totalScore;
+          bestXI = candidate;
+        }
+      }
+    }
+    
+    const startingXI = bestXI;
     
     // Captaincy Strategy: Heavily favor Attackers (MID/FWD) over DEF/GKP due to higher point ceilings
     const captaincyCandidates = [...startingXI].sort((a, b) => {
