@@ -102,13 +102,31 @@ export class FPLService {
     });
     score *= difficultyMultiplier;
 
-    if (riskMode !== 'value') {
-
+    if (riskMode === 'safe') {
       // Premium player protection (captaincy value)
-      // Elite assets are worth more than their PPM suggests because you captain them
       const costInMillions = player.now_cost / 10;
       if (costInMillions >= 10.0) score *= 1.15;
       else if (costInMillions >= 8.0) score *= 1.08;
+
+      // Heavy template protection (boost high ownership players)
+      const ownership = parseFloat(player.selected_by_percent || "0");
+      score *= (1 + 0.01 * ownership);
+    } 
+    else if (riskMode === 'aggressive') {
+      // Premium player protection
+      const costInMillions = player.now_cost / 10;
+      if (costInMillions >= 10.0) score *= 1.15;
+      else if (costInMillions >= 8.0) score *= 1.08;
+
+      // Differential Boost (+25%) for < 5% ownership (Restored to the exact logic the user praised)
+      if (player.selected_by_percent && parseFloat(player.selected_by_percent) < 5) {
+        score *= 1.25;
+      }
+    }
+    else if (riskMode === 'value') {
+      // Value Mode: Pure points/value optimization. No biases.
+      // We just add a deterministic microscopic tiebreaker for the LP solver
+      score += (player.id % 10000) * 1e-4;
     }
 
     return score;
@@ -144,21 +162,6 @@ export class FPLService {
       mapped.xP = oracle.getXP(p.id, nextEventId);
       mapped.eo = oracle.getTop1kEO?.(p.id) ?? 0;
       mapped.ownership = oracle.getTop1kOwnership?.(p.id) ?? parseFloat(p.selected_by_percent || "0") ?? 0;
-      
-      // Apply risk mode utilities exactly as described in the UI Engine Diagnostics
-      if (mapped.score > 0) {
-        if (riskMode === 'value') {
-          // Deterministic tie-breaker for branch-and-bound solver efficiency
-          mapped.score += (p.id % 10000) * 1e-4;
-        } else if (riskMode === 'safe') {
-          // Positive sentiment scaling: boost highly owned players
-          mapped.score *= (1 + 0.15 * (mapped.eo / 100));
-        } else if (riskMode === 'aggressive') {
-          // Differential scaling: massive boost to low ownership players
-          mapped.score *= (1 + 0.25 * (1 - mapped.eo / 100));
-        }
-      }
-      
       return mapped;
     });
 
