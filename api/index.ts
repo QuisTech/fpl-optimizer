@@ -27,12 +27,12 @@ export class FPLService {
 
   private static getHeaders() {
     return {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+      "User-Agent": "fpl-optimizer/1.0 (contact: github.com/QuisTech/fpl-optimizer)",
       "Accept": "application/json"
     };
   }
 
-  private static async fetchWithRetry(url: string, retries = 1): Promise<any> {
+  private static async fetchWithRetry(url: string, retries = 3): Promise<any> {
     for (let i = 0; i < retries; i++) {
       try {
         const config = { headers: this.getHeaders(), timeout: 5000 };

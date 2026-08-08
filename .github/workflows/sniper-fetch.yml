@@ -1,5 +1,8 @@
 name: FPL Sniper Data Fetch
 
+permissions:
+  contents: write
+
 on:
   schedule:
     # Runs at the top of every hour
