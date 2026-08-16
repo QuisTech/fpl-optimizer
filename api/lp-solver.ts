@@ -9,7 +9,7 @@ interface LPSolverModel {
   ints: Record<string, 1>;
 }
 
-export function solveOptimalSquad(oracle: XPOracle, gameweek: number, budget: number, horizon: number = 8, riskMode: string = 'safe', playerScores?: Map<number, number>): number[] {
+export function solveOptimalSquad(oracle: XPOracle, gameweek: number, budget: number, horizon: number = 8, riskMode: string = 'safe', playerScores?: Map<number, number>, lockedIds?: Set<number>, excludedIds?: Set<number>): number[] {
   const allIds = oracle.getAllPlayerIds();
   
   const model: LPSolverModel = {
@@ -28,6 +28,7 @@ export function solveOptimalSquad(oracle: XPOracle, gameweek: number, budget: nu
   };
 
   allIds.forEach(id => {
+    if (excludedIds && excludedIds.has(id)) return;
     const team = oracle.getTeam(id);
     if (!model.constraints[`team_${team}`]) {
       model.constraints[`team_${team}`] = { max: 3 };
@@ -51,7 +52,8 @@ export function solveOptimalSquad(oracle: XPOracle, gameweek: number, budget: nu
 
 
     // Only consider players who have a score > 0 to keep the model small
-    if (score > 0) {
+    const isLocked = !!(lockedIds && lockedIds.has(id));
+    if (score > 0 || isLocked) {
       model.variables[v] = { 
         score, 
         cost, 
@@ -60,7 +62,7 @@ export function solveOptimalSquad(oracle: XPOracle, gameweek: number, budget: nu
         [`team_${team}`]: 1, 
         [v]: 1 
       };
-      model.constraints[v] = { max: 1 };
+      model.constraints[v] = isLocked ? { equal: 1 } : { max: 1 };
       model.ints[v] = 1;
     }
   });

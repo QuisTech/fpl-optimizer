@@ -122,9 +122,9 @@ export default function App() {
               {tab === 'optimizer' ? (
                 <OptimizerPositioning />
               ) : tab === 'pitch' ? (
-                <PitchView data={data} formation={formation} />
+                <PitchView data={data} formation={formation} lockedPlayerIds={lockedPlayerIds} excludedPlayerIds={excludedPlayerIds} onToggleLock={toggleLock} onToggleExclude={toggleExclude} onClearConstraints={clearConstraints} />
               ) : tab === 'picks' ? (
-                <DataGrid data={data} />
+                <DataGrid data={data} lockedPlayerIds={lockedPlayerIds} excludedPlayerIds={excludedPlayerIds} onToggleLock={toggleLock} onToggleExclude={toggleExclude} />
               ) : tab === 'transfers' ? (
                 <TransferView syncedData={syncedData} />
               ) : tab === 'performance' ? (

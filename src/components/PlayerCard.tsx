@@ -54,11 +54,9 @@ export const PlayerCard = ({
             {typeof player.xP === 'number' ? player.xP.toFixed(1) : '—'} <span className="hidden sm:inline text-[7px] text-slate-500 font-normal">xP</span>
           </span>
           <span className="text-[6.5px] sm:text-[8px] text-slate-400 bg-slate-900 px-1 rounded font-mono border border-fpl-border/40">
-            {typeof player.eo === 'number' && player.eo > 0 
-              ? `EO ${player.eo.toFixed(0)}%` 
-              : typeof player.ownership === 'number' && player.ownership > 0 
-                ? `Own ${player.ownership.toFixed(0)}%` 
-                : 'Diff'}
+            {parseFloat(player.selected_by_percent || '0') < 5 
+              ? 'Diff' 
+              : `Own ${parseFloat(player.selected_by_percent || '0').toFixed(0)}%`}
           </span>
         </div>
       </div>
@@ -66,9 +64,9 @@ export const PlayerCard = ({
       {/* Mathematical Engine Proof Tooltip */}
       <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity z-50 bg-slate-900/95 backdrop-blur-sm border border-slate-700 text-slate-300 text-[9px] p-2 rounded shadow-2xl w-32 bottom-full mb-2 left-1/2 -translate-x-1/2 pointer-events-none">
         <div className="font-bold border-b border-slate-800 pb-1 mb-1 text-white">Engine Math</div>
-        <div className="flex justify-between"><span>Heuristic:</span> <span className="text-fpl-green font-mono">{typeof player.score === 'number' ? player.score.toFixed(2) : '—'}</span></div>
+        <div className="flex justify-between"><span>Raw xP:</span> <span className="text-fpl-green font-mono">{player.xP?.toFixed(2)}</span></div>
         <div className="flex justify-between"><span>Cost:</span> <span className="font-mono">£{(player.now_cost/10).toFixed(1)}M</span></div>
-        <div className="flex justify-between font-bold border-t border-slate-800 pt-1 mt-1"><span>ROI:</span> <span className="text-cyan-400 font-mono">{typeof player.score === 'number' ? (player.score / (player.now_cost / 10)).toFixed(2) : '—'}</span></div>
+        <div className="flex justify-between font-bold border-t border-slate-800 pt-1 mt-1"><span>ROI:</span> <span className="text-cyan-400 font-mono">{((player.xP || 0) / (player.now_cost / 10)).toFixed(2)}</span></div>
       </div>
     </div>
   );

@@ -9,6 +9,8 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
   const [teamId, setTeamId] = useState<string>('');
   const [syncedData, setSyncedData] = useState<TeamSyncResponse | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [lockedPlayerIds, setLockedPlayerIds] = useState<number[]>([]);
+  const [excludedPlayerIds, setExcludedPlayerIds] = useState<number[]>([]);
 
   const [history, setHistory] = useState<any>(() => {
     const saved = localStorage.getItem('fpl_optimizer_history');
@@ -21,13 +23,15 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
 
   useEffect(() => {
     fetchRecommendations();
-  }, [riskMode, syncedData?.totalCost, syncedData?.bank]);
+  }, [riskMode, syncedData?.totalCost, syncedData?.bank, lockedPlayerIds, excludedPlayerIds]);
 
   const fetchRecommendations = async () => {
     setLoading(true);
     try {
       const budgetQuery = syncedData ? `&budget=${(syncedData.totalCost || 0) + (syncedData.bank || 0)}` : '';
-      const res = await axios.get(`/api/recommendations?riskMode=${riskMode}${budgetQuery}`);
+      const lockedQuery = lockedPlayerIds.length > 0 ? `&locked=${lockedPlayerIds.join(',')}` : '';
+      const excludedQuery = excludedPlayerIds.length > 0 ? `&excluded=${excludedPlayerIds.join(',')}` : '';
+      const res = await axios.get(`/api/recommendations?riskMode=${riskMode}${budgetQuery}${lockedQuery}${excludedQuery}`);
       if (res.data) {
         setData(res.data);
       }
