@@ -31,7 +31,12 @@ export default function App() {
     formation,
     history,
     takeSnapshot,
-    fetchLivePoints
+    fetchLivePoints,
+    lockedPlayerIds,
+    excludedPlayerIds,
+    toggleLock,
+    toggleExclude,
+    clearConstraints
   } = useFPLData(riskMode);
 
   const handleSync = async () => {
