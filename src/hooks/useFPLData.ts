@@ -13,12 +13,12 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
   const [excludedPlayerIds, setExcludedPlayerIds] = useState<number[]>([]);
 
   const [history, setHistory] = useState<any>(() => {
-    const saved = localStorage.getItem('fpl_optimizer_history');
+    const saved = localStorage.getItem('fpl_strategist_history') || localStorage.getItem('fpl_optimizer_history');
     return saved ? JSON.parse(saved) : {};
   });
 
   useEffect(() => {
-    localStorage.setItem('fpl_optimizer_history', JSON.stringify(history));
+    localStorage.setItem('fpl_strategist_history', JSON.stringify(history));
   }, [history]);
 
   useEffect(() => {
@@ -29,8 +29,8 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     setLoading(true);
     try {
       const budgetQuery = syncedData ? `&budget=${(syncedData.totalCost || 0) + (syncedData.bank || 0)}` : '';
-      const lockedQuery = lockedPlayerIds.length > 0 ? `&locked=${lockedPlayerIds.join(',')}` : '';
-      const excludedQuery = excludedPlayerIds.length > 0 ? `&excluded=${excludedPlayerIds.join(',')}` : '';
+      const lockedQuery = (lockedPlayerIds || []).length > 0 ? `&locked=${lockedPlayerIds.join(',')}` : '';
+      const excludedQuery = (excludedPlayerIds || []).length > 0 ? `&excluded=${excludedPlayerIds.join(',')}` : '';
       const res = await axios.get(`/api/recommendations?riskMode=${riskMode}${budgetQuery}${lockedQuery}${excludedQuery}`);
       if (res.data) {
         setData(res.data);
@@ -56,7 +56,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     newHistory[gwId] = {
       ...gwHistory,
       [mode]: {
-        players: currentModeData.startingXI.map(p => ({
+        players: (currentModeData.startingXI || []).map(p => ({
           id: p.id,
           web_name: p.web_name,
           score: p.score,
@@ -70,15 +70,14 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     };
 
     setHistory(newHistory);
-    localStorage.setItem('fpl_optimizer_history', JSON.stringify(newHistory));
-    console.log(`[Snapshot] Saved GW${gwId} [${mode}] with ${newHistory[gwId][mode].players.length} players`);
+    localStorage.setItem('fpl_strategist_history', JSON.stringify(newHistory));
     return true;
   };
 
   const fetchLivePoints = async (gwId: number) => {
     try {
       const res = await axios.get(`/api/live/${gwId}`);
-      return res.data.elements; // Array of { id, stats: { total_points } }
+      return res.data.elements;
     } catch (err) {
       console.error("Live points fetch error:", err);
       return null;
@@ -112,6 +111,21 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     };
   }, [data]);
 
+  const toggleLock = (id: number) => {
+    setExcludedPlayerIds(prev => (prev || []).filter(pId => pId !== id));
+    setLockedPlayerIds(prev => (prev || []).includes(id) ? (prev || []).filter(pId => pId !== id) : [...(prev || []), id]);
+  };
+
+  const toggleExclude = (id: number) => {
+    setLockedPlayerIds(prev => (prev || []).filter(pId => pId !== id));
+    setExcludedPlayerIds(prev => (prev || []).includes(id) ? (prev || []).filter(pId => pId !== id) : [...(prev || []), id]);
+  };
+
+  const clearConstraints = () => {
+    setLockedPlayerIds([]);
+    setExcludedPlayerIds([]);
+  };
+
   return {
     data,
     loading,
@@ -125,6 +139,11 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     refresh: fetchRecommendations,
     history,
     takeSnapshot,
-    fetchLivePoints
+    fetchLivePoints,
+    lockedPlayerIds: lockedPlayerIds || [],
+    excludedPlayerIds: excludedPlayerIds || [],
+    toggleLock,
+    toggleExclude,
+    clearConstraints
   };
 };
