@@ -84,13 +84,24 @@ export class FPLService {
   }
 
   static calculatePlayerScore(player: FPLPlayer, fixtures: FPLFixture[], nextEventId: number, riskMode: string, oracle?: CSVOracle): number {
-    let score = player.total_points / (player.now_cost / 10);
+    let baseXP = oracle ? oracle.getXP(player.id, nextEventId) : 0;
+    if (baseXP === 0 && player.ep_next) {
+      baseXP = parseFloat(String(player.ep_next)) || 0;
+    }
+
+    let score = baseXP;
+
     const form = parseFloat(player.form) || 0;
-    score += form * 2;
+    score += form * 0.5;
     
     const xG = parseFloat(player.expected_goals) || 0;
     const xA = parseFloat(player.expected_assists) || 0;
-    score += (xG * 5) + (xA * 3);
+    score += (xG * 2) + (xA * 1.5);
+
+    if (score === 0) {
+      const historicalPpm = (player.total_points || 0) / (player.now_cost / 10);
+      score = historicalPpm > 0 ? historicalPpm : 0.5;
+    }
 
     const upcoming = fixtures.filter(f => f.event >= nextEventId && f.event < nextEventId + 3)
       .filter(f => f.team_h === player.team || f.team_a === player.team);
@@ -127,7 +138,7 @@ export class FPLService {
       const globalOwnership = parseFloat(player.selected_by_percent || "0");
       const reliableOwnership = eo > 0 ? eo : globalOwnership;
 
-      // Differential Boost (+25%) for < 5% ownership (Restored to the exact logic the user praised)
+      // Differential Boost (+25%) for < 5% ownership
       if (reliableOwnership < 5) {
         score *= 1.25;
       }
