@@ -1,5 +1,6 @@
 {
   "name": "fpl-optimizer",
+  "description": "An elite Fantasy Premier League (FPL) solver utilizing Integer Linear Programming (LP) and Multi-Horizon Beam Search.",
   "private": true,
   "version": "0.0.0",
   "type": "module",

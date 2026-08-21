@@ -1,6 +1,8 @@
 # FPL Optimizer (V3)
 
-An elite Fantasy Premier League (FPL) optimization engine that uses a **Multi-Horizon Beam Search** and **Linear Programming (LP)** to project the absolute mathematical optimum for your squad across multiple gameweeks.
+> **An elite Fantasy Premier League (FPL) solver utilizing Integer Linear Programming (LP) and Multi-Horizon Beam Search. Features real-time FPL team syncing, automated xP scraping, probabilistic variance modeling, and risk-adjusted squad optimization.**
+
+🌐 **Live Web Application**: [fpl-optimizer-mu.vercel.app](https://fpl-optimizer-mu.vercel.app/)
 
 ## 🚀 The V3 Architecture
 

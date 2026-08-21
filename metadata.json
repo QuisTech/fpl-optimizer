@@ -1,6 +1,6 @@
 {
   "name": "FPL Strategist",
-  "description": "Data-driven decision-support system for Fantasy Premier League. Provides optimized team selection, transfer recommendations, and performance insights.",
+  "description": "An elite Fantasy Premier League (FPL) solver utilizing Integer Linear Programming (LP) and Multi-Horizon Beam Search. Features real-time FPL team syncing, automated xP scraping, probabilistic variance modeling, and risk-adjusted squad optimization.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
