@@ -41,4 +41,5 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git add data/fplform.csv
           git diff --staged --quiet || git commit -m "Update FPL XP data [skip ci]"
+          git pull --rebase origin main
           git push
