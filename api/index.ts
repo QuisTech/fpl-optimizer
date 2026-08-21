@@ -435,38 +435,43 @@ export class FPLService {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const url = req.url || "/";
+  const parsedUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  const pathname = parsedUrl.pathname;
+  
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
     const query = req.query || {};
-    const riskMode = (query.riskMode as string) || 'safe';
+    const riskMode = parsedUrl.searchParams.get('riskMode') || (query.riskMode as string) || 'safe';
 
-    if (url.includes('/api/recommendations')) {
-      const budget = query.budget ? parseInt(query.budget as string) : 1000;
-      const lockedParam = query.locked ? (query.locked as string).split(',').map(Number).filter(Boolean) : [];
-      const excludedParam = query.excluded ? (query.excluded as string).split(',').map(Number).filter(Boolean) : [];
+    if (pathname.includes('/api/recommendations')) {
+      const budgetParam = parsedUrl.searchParams.get('budget');
+      const budget = budgetParam ? parseInt(budgetParam) : query.budget ? parseInt(query.budget as string) : 1000;
+      const lockedStr = parsedUrl.searchParams.get('locked') || (query.locked as string) || '';
+      const excludedStr = parsedUrl.searchParams.get('excluded') || (query.excluded as string) || '';
+      const lockedParam = lockedStr ? lockedStr.split(',').map(Number).filter(Boolean) : [];
+      const excludedParam = excludedStr ? excludedStr.split(',').map(Number).filter(Boolean) : [];
       const result = await FPLService.getRecommendations(riskMode, budget, lockedParam, excludedParam);
       return res.status(200).json(result);
     } 
     
-    if (url.includes('/api/sync')) {
-      const teamId = url.split('/').pop()?.split('?')[0];
-      if (!teamId) return res.status(400).json({ error: "Missing Team ID" });
+    if (pathname.includes('/api/sync')) {
+      const teamId = pathname.split('/').pop()?.split('?')[0];
+      if (!teamId || teamId === 'sync') return res.status(400).json({ error: "Missing Team ID" });
       const result = await FPLService.syncTeam(teamId, riskMode);
       return res.status(200).json(result);
     }
 
-    if (url.includes('/api/live')) {
-      const eventId = url.split('/').pop()?.split('?')[0];
-      if (!eventId) return res.status(400).json({ error: "Missing Event ID" });
+    if (pathname.includes('/api/live')) {
+      const eventId = pathname.split('/').pop()?.split('?')[0];
+      if (!eventId || eventId === 'live') return res.status(400).json({ error: "Missing Event ID" });
       const liveRes = await axios.get(`${FPL_BASE_URL}/event/${eventId}/live/`, { headers: (FPLService as any).getHeaders() });
       return res.status(200).json(liveRes.data);
     }
 
-    if (url.includes('/api/ping')) {
+    if (pathname.includes('/api/ping')) {
       return res.status(200).json({ status: "ok", message: "Grand Cru Engine Online" });
     }
 

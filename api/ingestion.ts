@@ -120,21 +120,29 @@ export class CSVOracle implements XPOracle {
           const expectedElementType = pos === 'GKP' ? 1 : pos === 'DEF' ? 2 : pos === 'MID' ? 3 : pos === 'FWD' ? 4 : 0;
           
           let match = players.find(p => 
-            p.team === expectedTeamId &&
-            p.element_type === expectedElementType &&
+            (!expectedTeamId || !p.team || p.team === expectedTeamId) &&
+            (!expectedElementType || !p.element_type || p.element_type === expectedElementType) &&
             (p.web_name?.toLowerCase() === playerName.toLowerCase() ||
-             p.second_name?.toLowerCase().includes(playerName.toLowerCase()) ||
-             playerName.toLowerCase().includes(p.second_name?.toLowerCase()) ||
-             playerName.toLowerCase().includes(p.web_name?.toLowerCase()))
+             (p.second_name && p.second_name.toLowerCase().includes(playerName.toLowerCase())) ||
+             (p.second_name && playerName.toLowerCase().includes(p.second_name.toLowerCase())) ||
+             (p.web_name && playerName.toLowerCase().includes(p.web_name.toLowerCase())))
           );
 
           if (!match) {
             match = players.find(p => 
-              p.element_type === expectedElementType &&
+              (!expectedElementType || !p.element_type || p.element_type === expectedElementType) &&
               (p.web_name?.toLowerCase() === playerName.toLowerCase() ||
-               p.second_name?.toLowerCase().includes(playerName.toLowerCase()) ||
-               playerName.toLowerCase().includes(p.second_name?.toLowerCase()) ||
-               playerName.toLowerCase().includes(p.web_name?.toLowerCase()))
+               (p.second_name && p.second_name.toLowerCase().includes(playerName.toLowerCase())) ||
+               (p.second_name && playerName.toLowerCase().includes(p.second_name.toLowerCase())) ||
+               (p.web_name && playerName.toLowerCase().includes(p.web_name.toLowerCase())))
+            );
+          }
+          if (!match) {
+            match = players.find(p => 
+              p.web_name?.toLowerCase() === playerName.toLowerCase() ||
+              (p.second_name && p.second_name.toLowerCase().includes(playerName.toLowerCase())) ||
+              (p.second_name && playerName.toLowerCase().includes(p.second_name.toLowerCase())) ||
+              (p.web_name && playerName.toLowerCase().includes(p.web_name.toLowerCase()))
             );
           }
           if (match) {
@@ -142,7 +150,7 @@ export class CSVOracle implements XPOracle {
             fplId = match.id;
             rawOwnership = parseFloat(match.selected_by_percent) || 100.0;
             realTeamId = match.team;
-            cost = match.now_cost;
+            if (match.now_cost !== undefined) cost = match.now_cost;
           }
         }
         
