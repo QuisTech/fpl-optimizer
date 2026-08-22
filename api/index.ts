@@ -25,23 +25,31 @@ export class FPLService {
   private static cache: { data: any; timestamp: number } | null = null;
   private static CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-  private static getHeaders() {
+  public static getHeaders() {
     return {
-      "User-Agent": "fpl-optimizer/1.0 (contact: github.com/QuisTech/fpl-optimizer)",
-      "Accept": "application/json"
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+      "Accept": "application/json, text/plain, */*",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Referer": "https://fantasy.premierleague.com/",
+      "sec-ch-ua": '"Chromium";v="125", "Not.A/Brand";v="24", "Google Chrome";v="125"',
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": '"Windows"',
+      "sec-fetch-dest": "empty",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-site": "same-origin"
     };
   }
 
-  private static async fetchWithRetry(url: string, retries = 3): Promise<any> {
+  public static async fetchWithRetry(url: string, retries = 3): Promise<any> {
     for (let i = 0; i < retries; i++) {
       try {
-        const config = { headers: this.getHeaders(), timeout: 5000 };
+        const config = { headers: this.getHeaders(), timeout: 10000 };
         const res = await axios.get(url, config);
         return res;
       } catch (err: any) {
         console.warn(`[FPL API] Attempt ${i + 1}/${retries} failed for ${url}: ${err.response?.status || err.message}`);
         if (i < retries - 1) {
-          await new Promise(r => setTimeout(r, 500)); 
+          await new Promise(r => setTimeout(r, 1000 * (i + 1))); 
         } else {
           throw err;
         }
@@ -478,7 +486,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (pathname.includes('/api/live')) {
       const eventId = pathname.split('/').pop()?.split('?')[0];
       if (!eventId || eventId === 'live') return res.status(400).json({ error: "Missing Event ID" });
-      const liveRes = await axios.get(`${FPL_BASE_URL}/event/${eventId}/live/`, { headers: (FPLService as any).getHeaders() });
+      const liveRes = await FPLService.fetchWithRetry(`${FPL_BASE_URL}/event/${eventId}/live/`);
       return res.status(200).json(liveRes.data);
     }
 
