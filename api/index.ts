@@ -25,14 +25,19 @@ export class FPLService {
   private static cache: { data: any; timestamp: number } | null = null;
   private static CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-    private static getHeaders() {
+  public static getHeaders() {
     return {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
       "Accept": "application/json, text/plain, */*",
-      "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
-      "Referer": "https://fantasy.premierleague.com/"
+      "Accept-Language": "en-US,en;q=0.9",
+      "Referer": "https://fantasy.premierleague.com/",
+      "sec-ch-ua": '"Chromium";v="125", "Not.A/Brand";v="24", "Google Chrome";v="125"',
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": '"Windows"',
+      "sec-fetch-dest": "empty",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-site": "same-origin"
     };
-  };
   }
 
   public static async fetchWithRetry(url: string, retries = 3): Promise<any> {
@@ -332,38 +337,7 @@ export class FPLService {
     const oracle = new CSVOracle('data/fplform_scraped.csv', baseData.players, riskMode, baseData.fixtures, baseData.teams, baseData.nextEventId);
 
     // 2. Fetch live user team
-    let teamRes: any;
-    let managerInfo: any = null;
-    try {
-      const [picksRes, entryRes] = await Promise.allSettled([
-        this.fetchWithRetry(`${FPL_BASE_URL}/entry/${teamId}/event/${currentEvent}/picks/`),
-        this.fetchWithRetry(`${FPL_BASE_URL}/entry/${teamId}/`)
-      ]);
-      if (picksRes.status === 'fulfilled' && picksRes.value?.data) {
-        teamRes = picksRes.value;
-      } else {
-        const err: any = (picksRes as any).reason;
-        if (err?.response?.status === 404) {
-          throw new Error(`FPL API Error: Team ID ${teamId} not found, or squads are locked.`);
-        }
-        throw err || new Error("Failed to fetch team picks");
-      }
-      if (entryRes.status === 'fulfilled' && entryRes.value?.data) {
-        const d = entryRes.value.data;
-        managerInfo = {
-          id: d.id,
-          teamName: d.name || 'FPL Team',
-          managerName: `${d.player_first_name || ''} ${d.player_last_name || ''}`.trim(),
-          summary_overall_rank: d.summary_overall_rank,
-          summary_overall_points: d.summary_overall_points,
-          summary_event_points: d.summary_event_points,
-          last_deadline_total_transfers: d.last_deadline_total_transfers
-        };
-      }
-    } catch (err: any) {
-      if (err.message?.includes('FPL API Error')) throw err;
-      throw new Error(`FPL Sync Error: ${err.message || 'Could not retrieve team data'}`);
-    }
+    const teamRes = await this.fetchWithRetry(`${FPL_BASE_URL}/entry/${teamId}/event/${currentEvent}/picks/`);
 
     const myPicks = teamRes.data.picks.map((p: any) => {
       const player = baseData.players.find((pl: any) => pl.id === p.element);
@@ -469,26 +443,12 @@ export class FPLService {
 
     const totalCost = myPicks.reduce((sum, p) => sum + (p.now_cost || 0), 0);
 
-    const rawHistory = teamRes?.data?.entry_history;
-    const entryHistory = rawHistory ? {
-      points: rawHistory.points ?? 0,
-      total_points: rawHistory.total_points ?? 0,
-      overall_rank: rawHistory.overall_rank ?? 0,
-      rank: rawHistory.rank ?? 0,
-      event_transfers: rawHistory.event_transfers ?? 0,
-      event_transfers_cost: rawHistory.event_transfers_cost ?? 0,
-      value: rawHistory.value ? rawHistory.value / 10 : 0,
-      bank: rawHistory.bank ? rawHistory.bank / 10 : 0
-    } : null;
-
     return {
       squad: myPicks,
       transfers,
       chips,
       bank,
-      totalCost,
-      entryHistory,
-      managerInfo
+      totalCost
     };
   }
 }
