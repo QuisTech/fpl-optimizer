@@ -16,16 +16,14 @@ import {
 import { TeamSyncResponse } from '../types';
 import { cn } from '../lib/utils';
 
-import { StripeCheckout } from './StripeCheckout';
-
 interface TransferViewProps {
   syncedData: TeamSyncResponse | null;
-  tier: string;
-  setTab: (tab: any) => void;
-  userId: string;
+  tier?: string;
+  setTab?: (tab: any) => void;
+  userId?: string;
 }
 
-export const TransferView = ({ syncedData, tier, setTab, userId }: TransferViewProps) => {
+export const TransferView = ({ syncedData, tier = 'ai-agent', setTab, userId }: TransferViewProps) => {
   const [activeTab, setActiveTab] = useState<'all' | 'squad' | 'transfers'>('all');
   const [hoveredSwapIndex, setHoveredSwapIndex] = useState<number | null>(null);
 
@@ -224,25 +222,7 @@ export const TransferView = ({ syncedData, tier, setTab, userId }: TransferViewP
               </span>
             </div>
 
-            {tier === 'free' ? (
-              <div className="text-center py-10 bg-slate-950/40 border border-fpl-border rounded-2xl flex flex-col items-center justify-center space-y-4">
-                <div className="w-12 h-12 bg-slate-900 rounded-full flex items-center justify-center border border-fpl-border">
-                  <ShieldCheck className="w-5 h-5 text-fpl-green opacity-50" />
-                </div>
-                <div>
-                  <h3 className="text-slate-200 font-bold mb-1">Strategist Tier Required</h3>
-                  <p className="text-slate-500 text-xs max-w-xs leading-relaxed">
-                    Unlock the LP Solver to instantly calculate the mathematically optimal transfer for your exact squad and budget.
-                  </p>
-                </div>
-                <StripeCheckout 
-            userId={userId} 
-            tier="strategist" 
-            buttonText="Upgrade to Strategist"
-            className="bg-fpl-green text-slate-950 hover:bg-fpl-green/90 text-[10px] font-black px-4 py-2 rounded-lg transition-colors uppercase tracking-widest mt-2"
-          />
-              </div>
-            ) : transfers.length === 0 ? (
+            {transfers.length === 0 ? (
               <div className="text-center py-6 bg-slate-950/20 border border-dashed border-fpl-border rounded-2xl text-slate-500 text-xs">
                 No beneficial single transfers found. Your squad is in peak condition!
               </div>
