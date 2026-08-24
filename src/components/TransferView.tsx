@@ -6,16 +6,26 @@ import {
   UserMinus, 
   UserPlus, 
   Sparkles, 
-  ShieldCheck
+  ShieldCheck,
+  Trophy,
+  Zap,
+  TrendingUp,
+  Globe,
+  Coins
 } from 'lucide-react';
 import { TeamSyncResponse } from '../types';
 import { cn } from '../lib/utils';
 
+import { StripeCheckout } from './StripeCheckout';
+
 interface TransferViewProps {
   syncedData: TeamSyncResponse | null;
+  tier: string;
+  setTab: (tab: any) => void;
+  userId: string;
 }
 
-export const TransferView = ({ syncedData }: TransferViewProps) => {
+export const TransferView = ({ syncedData, tier, setTab, userId }: TransferViewProps) => {
   const [activeTab, setActiveTab] = useState<'all' | 'squad' | 'transfers'>('all');
   const [hoveredSwapIndex, setHoveredSwapIndex] = useState<number | null>(null);
 
@@ -39,7 +49,7 @@ export const TransferView = ({ syncedData }: TransferViewProps) => {
     );
   }
 
-  const { squad, transfers } = syncedData;
+  const { squad, transfers, entryHistory, managerInfo } = syncedData;
 
   // Split into Starting XI and Bench using the position_in_squad property
   const startingXI = squad.filter(p => (p.position_in_squad ?? 0) <= 11);
@@ -62,6 +72,121 @@ export const TransferView = ({ syncedData }: TransferViewProps) => {
       exit={{ opacity: 0 }}
       className="flex flex-col h-full space-y-4"
     >
+      {/* MANAGER & TEAM PERFORMANCE HUD BANNER */}
+      {(managerInfo || entryHistory) && (
+        <div className="relative overflow-hidden bg-gradient-to-br from-slate-900/90 via-slate-950 to-slate-900/90 border border-fpl-border/80 rounded-2xl p-3.5 shadow-lg">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-fpl-purple/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-fpl-green/10 rounded-full blur-2xl pointer-events-none" />
+          
+          {/* Header row: Team & Manager Name */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-fpl-border/40">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-fpl-purple/20 border border-fpl-purple/40 flex items-center justify-center text-fpl-purple shadow-inner">
+                <Trophy className="w-4 h-4 text-fpl-green" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-black text-white tracking-wide flex items-center gap-1.5">
+                  {managerInfo?.teamName || 'Synced FPL Squad'}
+                  {managerInfo?.id && (
+                    <span className="text-[9px] font-mono text-slate-400 font-bold bg-slate-950 px-1.5 py-0.5 rounded border border-fpl-border/40">
+                      ID: {managerInfo.id}
+                    </span>
+                  )}
+                </span>
+                {managerInfo?.managerName && (
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    Manager: <span className="text-slate-300 font-bold">{managerInfo.managerName}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-bold text-fpl-green bg-fpl-green/10 border border-fpl-green/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3" /> Live FPL Synced
+              </span>
+            </div>
+          </div>
+
+          {/* Metrics Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {/* Metric 1: Latest GW Points */}
+            <div className="bg-slate-950/60 border border-fpl-border/40 rounded-xl p-2.5 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-slate-400 mb-1">
+                <span className="text-[9px] font-bold uppercase tracking-wider">Latest GW</span>
+                <Zap className="w-3 h-3 text-amber-400" />
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-lg font-black text-white font-mono">
+                  {entryHistory?.points ?? managerInfo?.summary_event_points ?? '—'}
+                </span>
+                <span className="text-[9px] text-slate-500 font-bold uppercase">pts</span>
+              </div>
+              {entryHistory?.rank ? (
+                <span className="text-[8px] text-slate-500 font-mono truncate mt-0.5">
+                  GW Rank: #{entryHistory.rank.toLocaleString()}
+                </span>
+              ) : (
+                <span className="text-[8px] text-slate-500 font-mono mt-0.5">Live Round</span>
+              )}
+            </div>
+
+            {/* Metric 2: Overall Points */}
+            <div className="bg-slate-950/60 border border-fpl-border/40 rounded-xl p-2.5 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-slate-400 mb-1">
+                <span className="text-[9px] font-bold uppercase tracking-wider">Overall Points</span>
+                <TrendingUp className="w-3 h-3 text-fpl-green" />
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-lg font-black text-fpl-green font-mono">
+                  {entryHistory?.total_points ?? managerInfo?.summary_overall_points ?? '—'}
+                </span>
+                <span className="text-[9px] text-slate-500 font-bold uppercase">pts</span>
+              </div>
+              <span className="text-[8px] text-slate-500 font-mono mt-0.5">
+                Total Season EV
+              </span>
+            </div>
+
+            {/* Metric 3: Overall Rank */}
+            <div className="bg-slate-950/60 border border-fpl-border/40 rounded-xl p-2.5 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-slate-400 mb-1">
+                <span className="text-[9px] font-bold uppercase tracking-wider">Overall Rank</span>
+                <Globe className="w-3 h-3 text-cyan-400" />
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-sm sm:text-base font-black text-cyan-300 font-mono truncate">
+                  {entryHistory?.overall_rank 
+                    ? `#${entryHistory.overall_rank.toLocaleString()}` 
+                    : managerInfo?.summary_overall_rank 
+                      ? `#${managerInfo.summary_overall_rank.toLocaleString()}` 
+                      : '—'}
+                </span>
+              </div>
+              <span className="text-[8px] text-slate-500 font-mono mt-0.5">
+                Worldwide Table
+              </span>
+            </div>
+
+            {/* Metric 4: Squad Value & Bank */}
+            <div className="bg-slate-950/60 border border-fpl-border/40 rounded-xl p-2.5 flex flex-col justify-between">
+              <div className="flex items-center justify-between text-slate-400 mb-1">
+                <span className="text-[9px] font-bold uppercase tracking-wider">Squad Value</span>
+                <Coins className="w-3 h-3 text-purple-400" />
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-lg font-black text-purple-300 font-mono">
+                  £{(entryHistory?.value ?? (syncedData.totalCost ? syncedData.totalCost / 10 : 100.0)).toFixed(1)}M
+                </span>
+              </div>
+              <span className="text-[8px] text-slate-400 font-mono mt-0.5">
+                Bank: <span className="text-fpl-green font-bold">£{((entryHistory?.bank ?? syncedData.bank ?? 0) / (entryHistory ? 1 : 10)).toFixed(1)}M</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sub-navigation tabs within Transfers tab */}
       <div className="flex justify-between items-center border-b border-fpl-border/50 pb-3">
         <div className="flex space-x-1 bg-slate-950/80 p-0.5 rounded-lg border border-fpl-border/40">
@@ -99,7 +224,25 @@ export const TransferView = ({ syncedData }: TransferViewProps) => {
               </span>
             </div>
 
-            {transfers.length === 0 ? (
+            {tier === 'free' ? (
+              <div className="text-center py-10 bg-slate-950/40 border border-fpl-border rounded-2xl flex flex-col items-center justify-center space-y-4">
+                <div className="w-12 h-12 bg-slate-900 rounded-full flex items-center justify-center border border-fpl-border">
+                  <ShieldCheck className="w-5 h-5 text-fpl-green opacity-50" />
+                </div>
+                <div>
+                  <h3 className="text-slate-200 font-bold mb-1">Strategist Tier Required</h3>
+                  <p className="text-slate-500 text-xs max-w-xs leading-relaxed">
+                    Unlock the LP Solver to instantly calculate the mathematically optimal transfer for your exact squad and budget.
+                  </p>
+                </div>
+                <StripeCheckout 
+            userId={userId} 
+            tier="strategist" 
+            buttonText="Upgrade to Strategist"
+            className="bg-fpl-green text-slate-950 hover:bg-fpl-green/90 text-[10px] font-black px-4 py-2 rounded-lg transition-colors uppercase tracking-widest mt-2"
+          />
+              </div>
+            ) : transfers.length === 0 ? (
               <div className="text-center py-6 bg-slate-950/20 border border-dashed border-fpl-border rounded-2xl text-slate-500 text-xs">
                 No beneficial single transfers found. Your squad is in peak condition!
               </div>
@@ -195,8 +338,8 @@ export const TransferView = ({ syncedData }: TransferViewProps) => {
                           <div className="flex items-center gap-3">
                             <div className="w-px h-8 bg-slate-800/80 hidden sm:block"></div>
                             <div className="flex flex-col items-end sm:items-center justify-center min-w-[60px]">
-                              <span className="text-sm sm:text-lg font-black text-fpl-green flex items-center gap-0.5">
-                                +{rec.xPDelta.toFixed(1)}
+                              <span className={cn("text-sm sm:text-lg font-black flex items-center gap-0.5", rec.xPDelta > 0 ? "text-fpl-green" : "text-rose-400")}>
+                                {rec.xPDelta > 0 ? '+' : ''}{rec.xPDelta.toFixed(1)}
                               </span>
                               <span className="text-[8px] text-slate-500 font-bold uppercase">xP Gain</span>
                             </div>

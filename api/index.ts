@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { 
   FPLPlayer, FPLTeam, FPLFixture, ScoredPlayer, 
   FPLPlayerSchema, FPLTeamSchema, FPLFixtureSchema,
-  RecommendationResponse, TeamSyncResponse, TransferRecommendation, ChipAdvice
+  RecommendationResponse, TeamSyncResponse, EntryHistory, ManagerInfo, TransferRecommendation, ChipAdvice
 } from './types.js';
 import { CSVOracle } from './ingestion.js';
 import { Simulator } from './simulator.js';
@@ -337,7 +337,38 @@ export class FPLService {
     const oracle = new CSVOracle('data/fplform_scraped.csv', baseData.players, riskMode, baseData.fixtures, baseData.teams, baseData.nextEventId);
 
     // 2. Fetch live user team
-    const teamRes = await this.fetchWithRetry(`${FPL_BASE_URL}/entry/${teamId}/event/${currentEvent}/picks/`);
+    let teamRes: any;
+    let managerInfo: any = null;
+    try {
+      const [picksRes, entryRes] = await Promise.allSettled([
+        this.fetchWithRetry(`${FPL_BASE_URL}/entry/${teamId}/event/${currentEvent}/picks/`),
+        this.fetchWithRetry(`${FPL_BASE_URL}/entry/${teamId}/`)
+      ]);
+      if (picksRes.status === 'fulfilled' && picksRes.value?.data) {
+        teamRes = picksRes.value;
+      } else {
+        const err: any = (picksRes as any).reason;
+        if (err?.response?.status === 404) {
+          throw new Error(`FPL API Error: Team ID ${teamId} not found, or squads are locked.`);
+        }
+        throw err || new Error("Failed to fetch team picks");
+      }
+      if (entryRes.status === 'fulfilled' && entryRes.value?.data) {
+        const d = entryRes.value.data;
+        managerInfo = {
+          id: d.id,
+          teamName: d.name || 'FPL Team',
+          managerName: `${d.player_first_name || ''} ${d.player_last_name || ''}`.trim(),
+          summary_overall_rank: d.summary_overall_rank,
+          summary_overall_points: d.summary_overall_points,
+          summary_event_points: d.summary_event_points,
+          last_deadline_total_transfers: d.last_deadline_total_transfers
+        };
+      }
+    } catch (err: any) {
+      if (err.message?.includes('FPL API Error')) throw err;
+      throw new Error(`FPL Sync Error: ${err.message || 'Could not retrieve team data'}`);
+    }
 
     const myPicks = teamRes.data.picks.map((p: any) => {
       const player = baseData.players.find((pl: any) => pl.id === p.element);
