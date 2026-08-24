@@ -336,8 +336,41 @@ export class FPLService {
     // 1. Initialize the V3 Engine Oracle first
     const oracle = new CSVOracle('data/fplform_scraped.csv', baseData.players, riskMode, baseData.fixtures, baseData.teams, baseData.nextEventId);
 
-    // 2. Fetch live user team
-    const teamRes = await this.fetchWithRetry(`${FPL_BASE_URL}/entry/${teamId}/event/${currentEvent}/picks/`);
+    // 2. Fetch live user team & manager metadata
+    let teamRes: any;
+    let managerInfo: ManagerInfo | null = null;
+    try {
+      const [picksRes, entryRes] = await Promise.allSettled([
+        this.fetchWithRetry(`${FPL_BASE_URL}/entry/${teamId}/event/${currentEvent}/picks/`),
+        this.fetchWithRetry(`${FPL_BASE_URL}/entry/${teamId}/`)
+      ]);
+
+      if (picksRes.status === 'fulfilled' && picksRes.value?.data) {
+        teamRes = picksRes.value;
+      } else {
+        const err: any = (picksRes as any).reason;
+        if (err?.response?.status === 404) {
+          throw new Error(`FPL API Error: Team ID ${teamId} not found, or squads are currently locked and hidden by FPL until the Gameweek 1 deadline.`);
+        }
+        throw err || new Error("Failed to fetch team picks");
+      }
+
+      if (entryRes.status === 'fulfilled' && entryRes.value?.data) {
+        const d = entryRes.value.data;
+        managerInfo = {
+          id: d.id,
+          teamName: d.name || 'FPL Team',
+          managerName: `${d.player_first_name || ''} ${d.player_last_name || ''}`.trim(),
+          summary_overall_rank: d.summary_overall_rank,
+          summary_overall_points: d.summary_overall_points,
+          summary_event_points: d.summary_event_points,
+          last_deadline_total_transfers: d.last_deadline_total_transfers
+        };
+      }
+    } catch (err: any) {
+      if (err.message?.includes('FPL API Error')) throw err;
+      throw new Error(`FPL Sync Error: ${err.message || 'Could not retrieve team data'}`);
+    }
 
     const myPicks = teamRes.data.picks.map((p: any) => {
       const player = baseData.players.find((pl: any) => pl.id === p.element);
@@ -443,12 +476,26 @@ export class FPLService {
 
     const totalCost = myPicks.reduce((sum, p) => sum + (p.now_cost || 0), 0);
 
+    const rawHistory = teamRes?.data?.entry_history;
+    const entryHistory: EntryHistory | null = rawHistory ? {
+      points: rawHistory.points ?? 0,
+      total_points: rawHistory.total_points ?? 0,
+      overall_rank: rawHistory.overall_rank ?? 0,
+      rank: rawHistory.rank ?? 0,
+      event_transfers: rawHistory.event_transfers ?? 0,
+      event_transfers_cost: rawHistory.event_transfers_cost ?? 0,
+      value: rawHistory.value ? rawHistory.value / 10 : 0,
+      bank: rawHistory.bank ? rawHistory.bank / 10 : 0
+    } : null;
+
     return {
       squad: myPicks,
       transfers,
       chips,
       bank,
-      totalCost
+      totalCost,
+      entryHistory,
+      managerInfo
     };
   }
 }
