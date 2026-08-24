@@ -25,18 +25,12 @@ export class FPLService {
   private static cache: { data: any; timestamp: number } | null = null;
   private static CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-  public static getHeaders() {
+  private static getHeaders() {
     return {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
       "Accept": "application/json, text/plain, */*",
-      "Accept-Language": "en-US,en;q=0.9",
-      "Referer": "https://fantasy.premierleague.com/",
-      "sec-ch-ua": '"Chromium";v="125", "Not.A/Brand";v="24", "Google Chrome";v="125"',
-      "sec-ch-ua-mobile": "?0",
-      "sec-ch-ua-platform": '"Windows"',
-      "sec-fetch-dest": "empty",
-      "sec-fetch-mode": "cors",
-      "sec-fetch-site": "same-origin"
+      "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
+      "Referer": "https://fantasy.premierleague.com/"
     };
   }
 
@@ -336,25 +330,23 @@ export class FPLService {
     // 1. Initialize the V3 Engine Oracle first
     const oracle = new CSVOracle('data/fplform_scraped.csv', baseData.players, riskMode, baseData.fixtures, baseData.teams, baseData.nextEventId);
 
-    // 2. Fetch live user team & manager metadata
+    // 2. Fetch live user team
     let teamRes: any;
-    let managerInfo: ManagerInfo | null = null;
+    let managerInfo: any = null;
     try {
       const [picksRes, entryRes] = await Promise.allSettled([
         this.fetchWithRetry(`${FPL_BASE_URL}/entry/${teamId}/event/${currentEvent}/picks/`),
         this.fetchWithRetry(`${FPL_BASE_URL}/entry/${teamId}/`)
       ]);
-
       if (picksRes.status === 'fulfilled' && picksRes.value?.data) {
         teamRes = picksRes.value;
       } else {
         const err: any = (picksRes as any).reason;
         if (err?.response?.status === 404) {
-          throw new Error(`FPL API Error: Team ID ${teamId} not found, or squads are currently locked and hidden by FPL until the Gameweek 1 deadline.`);
+          throw new Error(`FPL API Error: Team ID ${teamId} not found, or squads are locked.`);
         }
         throw err || new Error("Failed to fetch team picks");
       }
-
       if (entryRes.status === 'fulfilled' && entryRes.value?.data) {
         const d = entryRes.value.data;
         managerInfo = {
@@ -477,7 +469,7 @@ export class FPLService {
     const totalCost = myPicks.reduce((sum, p) => sum + (p.now_cost || 0), 0);
 
     const rawHistory = teamRes?.data?.entry_history;
-    const entryHistory: EntryHistory | null = rawHistory ? {
+    const entryHistory = rawHistory ? {
       points: rawHistory.points ?? 0,
       total_points: rawHistory.total_points ?? 0,
       overall_rank: rawHistory.overall_rank ?? 0,
