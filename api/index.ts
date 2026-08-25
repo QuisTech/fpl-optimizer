@@ -177,7 +177,7 @@ export class FPLService {
       team_name: team?.name || "Unknown",
       team_short_name: team?.short_name || "UNK",
       score: this.calculatePlayerScore(p, fixtures, nextEventId, riskMode, oracle),
-      xP: oracle ? oracle.getXP(p.id, nextEventId) : (baseXp || parseFloat(p.ep_next || "0") || (p.total_points || 0)),
+      xP: oracle ? oracle.getXP(p.id, nextEventId) : (baseXp || parseFloat(String(p.ep_next || "0")) || (p.total_points || 0)),
       ppm: (p.total_points || 0) / ((p.now_cost || 50) / 10),
       next_fixtures: next3Fix,
       isCaptain: false,
