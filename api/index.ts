@@ -176,7 +176,7 @@ export class FPLService {
       position,
       team_name: team?.name || "Unknown",
       team_short_name: team?.short_name || "UNK",
-      score: typeof this.calculatePlayerScore === 'function' ? this.calculatePlayerScore(baseXp, p, riskMode, (fuel || 'fplform'), fixtures, nextEventId) : (baseXp || (p.total_points || 0)),
+      score: this.calculatePlayerScore(baseXp, p, riskMode, fixtures, nextEventId), p, riskMode, (fuel || 'fplform'), fixtures, nextEventId) : (baseXp || (p.total_points || 0)),
       xP: baseXp,
       ppm: (p.total_points || 0) / ((p.now_cost || 50) / 10),
       next_fixtures: next3Fix,
