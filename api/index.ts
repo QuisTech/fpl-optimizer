@@ -160,11 +160,12 @@ export class FPLService {
     const team = teams.find(t => t.id === p.team);
     const next3Fix = (fixtures || [])
       .filter(f => (f.team_h === p.team || f.team_a === p.team) && f.event !== null && f.event >= nextEventId)
-      .slice(0, 3)
+      .slice(0, 10)
       .map(f => {
         const isHome = f.team_h === p.team;
         const oppTeam = teams.find(t => t.id === (isHome ? f.team_a : f.team_h));
         return {
+          event: f.event,
           opponent: oppTeam ? oppTeam.short_name : "TBD",
           difficulty: isHome ? f.team_h_difficulty : f.team_a_difficulty,
           is_home: isHome
