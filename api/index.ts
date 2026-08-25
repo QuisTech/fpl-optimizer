@@ -154,7 +154,7 @@ export class FPLService {
     return score;
   }
 
-  static mapToScoredPlayer(p: FPLPlayer, teams: FPLTeam[], fixtures: FPLFixture[], nextEventId: number, riskMode: string, oracle?: CSVOracle): ScoredPlayer {
+  static mapToScoredPlayer(p: FPLPlayer, teams: FPLTeam[], fixtures: FPLFixture[], nextEventId: number, riskMode: string, oracle?: CSVOracle, baseXp: number = 0): ScoredPlayer {
     const posMap: Record<number, string> = { 1: "GKP", 2: "DEF", 3: "MID", 4: "FWD" };
     const position = posMap[p.element_type] || "MID";
     const team = teams.find(t => t.id === p.team);
@@ -176,8 +176,8 @@ export class FPLService {
       position,
       team_name: team?.name || "Unknown",
       team_short_name: team?.short_name || "UNK",
-      score: this.calculatePlayerScore(baseXp, p, riskMode, fixtures, nextEventId), p, riskMode, (fuel || 'fplform'), fixtures, nextEventId) : (baseXp || (p.total_points || 0)),
-      xP: baseXp,
+      score: this.calculatePlayerScore(p, fixtures, nextEventId, riskMode, oracle),
+      xP: oracle ? oracle.getXP(p.id, nextEventId) : (baseXp || parseFloat(p.ep_next || "0") || (p.total_points || 0)),
       ppm: (p.total_points || 0) / ((p.now_cost || 50) / 10),
       next_fixtures: next3Fix,
       isCaptain: false,
