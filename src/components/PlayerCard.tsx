@@ -16,10 +16,10 @@ interface PlayerCardProps {
 
 export const PlayerCard = ({ 
   player, 
-  isCaptain = false, 
-  isViceCaptain = false,
-  isLocked = false,
-  isExcluded = false,
+  isCaptain, 
+  isViceCaptain,
+  isLocked,
+  isExcluded,
   onToggleLock,
   onToggleExclude,
   compact = false 
@@ -34,8 +34,8 @@ export const PlayerCard = ({
       isViceCaptain ? "border-fpl-pink" : 
       isExcluded ? "border-rose-500/50 opacity-40" : "border-slate-800",
       compact 
-        ? "w-[54px] h-[72px] sm:w-20 sm:h-28" 
-        : "w-[68px] h-[88px] sm:w-28 sm:h-36"
+        ? "w-[58px] min-h-[82px] sm:w-20 sm:min-h-32" 
+        : "w-[72px] min-h-[96px] sm:w-28 sm:min-h-40"
     )}>
       {isCaptain && (
         <div className="absolute -top-1.5 -right-1.5 sm:-top-2 sm:-right-2 bg-fpl-green text-slate-950 font-black px-1 sm:px-1.5 py-0.25 sm:py-0.5 rounded text-[7px] sm:text-[8px] z-10">
@@ -52,8 +52,8 @@ export const PlayerCard = ({
           <Lock className="w-2 h-2" />
         </div>
       )}
-
-      {/* Quick Lock / Exclude Hover Actions */}
+      
+      {/* Quick Lock / Exclude Hover Action Overlay */}
       {(onToggleLock || onToggleExclude) && !compact && (
         <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 z-20">
           {onToggleLock && (
@@ -62,7 +62,7 @@ export const PlayerCard = ({
                 e.stopPropagation();
                 onToggleLock(player.id);
               }}
-              title={isLocked ? "Unlock Player" : "Lock Player"}
+              title={isLocked ? "Unlock Player" : "Lock Player (Force Include)"}
               className={cn(
                 "p-1 rounded transition-colors shadow-sm",
                 isLocked ? "bg-amber-400 text-slate-950" : "bg-slate-900/90 text-slate-400 hover:text-amber-300 hover:bg-slate-800"
@@ -77,7 +77,7 @@ export const PlayerCard = ({
                 e.stopPropagation();
                 onToggleExclude(player.id);
               }}
-              title={isExcluded ? "Unban Player" : "Exclude Player"}
+              title={isExcluded ? "Unban Player" : "Exclude Player (Ban from solve)"}
               className={cn(
                 "p-1 rounded transition-colors shadow-sm",
                 isExcluded ? "bg-rose-500 text-white" : "bg-slate-900/90 text-slate-400 hover:text-rose-400 hover:bg-slate-800"
@@ -88,7 +88,7 @@ export const PlayerCard = ({
           )}
         </div>
       )}
-      
+
       <div className="flex-1 flex flex-col items-center justify-center space-y-0.5 sm:space-y-1">
         <div className="flex items-center gap-0.5 text-[7px] sm:text-[9px] font-bold text-slate-500 uppercase tracking-tighter">
           <span>{player.team_short_name}</span>
@@ -107,15 +107,38 @@ export const PlayerCard = ({
             {typeof player.xP === 'number' ? player.xP.toFixed(1) : '—'} <span className="hidden sm:inline text-[7px] text-slate-500 font-normal">xP</span>
           </span>
           <span className="text-[6.5px] sm:text-[8px] text-slate-400 bg-slate-900 px-1 rounded font-mono border border-fpl-border/40">
-            {parseFloat(player.selected_by_percent || '0') < 5 
-              ? 'Diff' 
-              : 'Own ' + parseFloat(player.selected_by_percent || '0').toFixed(0) + '%'}
+            {typeof player.eo === 'number' && player.eo > 0 
+              ? `EO ${player.eo.toFixed(0)}%` 
+              : typeof player.ownership === 'number' && player.ownership > 0 
+                ? `Own ${player.ownership.toFixed(0)}%` 
+                : 'Diff'}
           </span>
         </div>
+
+        {/* Next 3 Fixture Difficulty Pills */}
+        {player.next_fixtures && player.next_fixtures.length > 0 && (
+          <div className="flex items-center justify-center gap-0.5 mt-0.5 sm:mt-1 w-full px-0.5">
+            {player.next_fixtures.slice(0, 3).map((f, idx) => (
+              <span
+                key={idx}
+                title={`${f.opponent} (${f.is_home ? 'Home' : 'Away'}) - FDR ${f.difficulty}`}
+                className={cn(
+                  "text-[6px] sm:text-[7.5px] font-black px-0.5 sm:px-1 py-0.25 rounded font-mono leading-none tracking-tighter truncate flex items-center justify-center",
+                  f.difficulty <= 2 ? "bg-emerald-500/25 text-emerald-300 border border-emerald-500/40" :
+                  f.difficulty === 3 ? "bg-amber-500/25 text-amber-300 border border-amber-500/40" :
+                  f.difficulty === 4 ? "bg-rose-500/25 text-rose-300 border border-rose-500/40" :
+                  "bg-purple-500/25 text-purple-300 border border-purple-500/40"
+                )}
+              >
+                {f.opponent}{f.is_home ? '(H)' : '(A)'}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       
-      {/* Mathematical Tooltip */}
-      <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity z-50 bg-slate-900/95 backdrop-blur-sm border border-slate-700 text-slate-300 text-[9px] p-2 rounded shadow-2xl w-32 bottom-full mb-2 left-1/2 -translate-x-1/2 pointer-events-none">
+      {/* Mathematical Engine Proof Tooltip */}
+      <div className="absolute opacity-0 group-hover:opacity-100 transition-opacity z-50 bg-slate-900/95 backdrop-blur-sm border border-slate-700 text-slate-300 text-[9px] p-2 rounded shadow-2xl w-36 bottom-full mb-2 left-1/2 -translate-x-1/2 pointer-events-none">
         <div className="font-bold border-b border-slate-800 pb-1 mb-1 text-white flex justify-between items-center">
           <span>Engine Math</span>
           {isLocked && <span className="text-[8px] text-amber-400 uppercase font-black">Locked</span>}
