@@ -7,13 +7,19 @@ export function getFirestore(): Firestore | null {
 
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID?.trim();
   const clientEmail = process.env.GOOGLE_CLOUD_CLIENT_EMAIL?.trim();
-  const privateKey = process.env.GOOGLE_CLOUD_PRIVATE_KEY?.replace(/\\n/g, '\n').trim();
+  let privateKey = process.env.GOOGLE_CLOUD_PRIVATE_KEY;
 
   if (!projectId || !clientEmail || !privateKey) {
+    console.warn("[Firestore] Missing credentials env vars:", {
+      hasProjectId: !!projectId,
+      hasClientEmail: !!clientEmail,
+      hasPrivateKey: !!privateKey
+    });
     return null;
   }
 
   try {
+    privateKey = privateKey.trim().replace(/^["']|["']$/g, '').replace(/\\n/g, '\n').trim();
     db = new Firestore({
       projectId,
       credentials: {
