@@ -6,11 +6,19 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
   const [data, setData] = useState<RecommendationResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [teamId, setTeamId] = useState<string>('');
+  const [teamId, setTeamId] = useState<string>(() => {
+    return localStorage.getItem('fpl_team_id') || '';
+  });
   const [syncedData, setSyncedData] = useState<TeamSyncResponse | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [lockedPlayerIds, setLockedPlayerIds] = useState<number[]>([]);
   const [excludedPlayerIds, setExcludedPlayerIds] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (teamId) {
+      localStorage.setItem('fpl_team_id', teamId);
+    }
+  }, [teamId]);
 
   const [userId] = useState<string>(() => {
     let id = localStorage.getItem('fpl_user_id');
@@ -20,6 +28,8 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     }
     return id;
   });
+
+  const effectiveKey = teamId ? `team_${teamId.trim()}` : userId;
 
   const [history, setHistory] = useState<any>(() => {
     const saved = localStorage.getItem('fpl_strategist_history') || localStorage.getItem('fpl_optimizer_history');
@@ -31,7 +41,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
   }, [history]);
 
   useEffect(() => {
-    axios.get(`/api/snapshots?userId=${userId}`)
+    axios.get(`/api/snapshots?userId=${effectiveKey}`)
       .then(res => {
         if (res.data?.history && typeof res.data.history === 'object' && Object.keys(res.data.history).length > 0) {
           setHistory((prev: any) => {
@@ -42,7 +52,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
         }
       })
       .catch(err => console.warn("[Snapshots API] Fetch notice:", err));
-  }, [userId]);
+  }, [effectiveKey]);
 
   useEffect(() => {
     fetchRecommendations();
@@ -100,7 +110,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     setHistory(newHistory);
     localStorage.setItem('fpl_strategist_history', JSON.stringify(newHistory));
 
-    axios.post('/api/snapshots', { userId, history: newHistory })
+    axios.post('/api/snapshots', { userId: effectiveKey, history: newHistory })
       .catch(err => console.warn("[Snapshots API] Post notice:", err));
 
     return true;
@@ -119,10 +129,21 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
   const syncTeam = async () => {
     if (!teamId) return;
     setSyncing(true);
+    localStorage.setItem('fpl_team_id', teamId);
     try {
       const res = await axios.get(`/api/sync/${teamId}?riskMode=${riskMode}`);
       setSyncedData(res.data);
       setError(null);
+
+      // Fetch team snapshots from cloud backend
+      axios.get(`/api/snapshots?userId=team_${teamId.trim()}`)
+        .then(snapRes => {
+          if (snapRes.data?.history && typeof snapRes.data.history === 'object') {
+            setHistory((prev: any) => ({ ...prev, ...snapRes.data.history }));
+          }
+        })
+        .catch(err => console.warn("[Snapshots API] Fetch notice on sync:", err));
+
       return true;
     } catch (err) {
       setError("Failed to sync team. Check your Team ID.");
