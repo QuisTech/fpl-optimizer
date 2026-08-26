@@ -1,3 +1,4 @@
+import { getFirestore } from "../lib/firestore.js";
 import type { Request, Response } from "express";
 
 let memorySnapshotStore: Record<string, any> = {};
@@ -14,7 +15,15 @@ export default async function handler(req: Request, res: Response) {
   const userId = (req.query.userId as string) || (req.body?.userId as string) || 'default_user';
 
   try {
+    const db = getFirestore();
+
     if (req.method === 'GET') {
+      if (db) {
+        const doc = await db.collection('user_snapshots').doc(userId).get();
+        if (doc.exists && doc.data()?.history) {
+          return res.json({ history: doc.data()?.history });
+        }
+      }
       return res.json({ history: memorySnapshotStore[userId] || {} });
     }
 
@@ -29,12 +38,19 @@ export default async function handler(req: Request, res: Response) {
         ...history
       };
 
+      if (db) {
+        await db.collection('user_snapshots').doc(userId).set({
+          history: memorySnapshotStore[userId],
+          updatedAt: new Date()
+        }, { merge: true });
+      }
+
       return res.json({ success: true, history: memorySnapshotStore[userId] });
     }
 
     return res.status(405).json({ error: "Method not allowed" });
   } catch (error: any) {
     console.error("Snapshots API Error:", error);
-    return res.json({ history: {} });
+    return res.json({ history: memorySnapshotStore[userId] || {} });
   }
 }

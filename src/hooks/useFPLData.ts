@@ -12,6 +12,15 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
   const [lockedPlayerIds, setLockedPlayerIds] = useState<number[]>([]);
   const [excludedPlayerIds, setExcludedPlayerIds] = useState<number[]>([]);
 
+  const [userId] = useState<string>(() => {
+    let id = localStorage.getItem('fpl_user_id');
+    if (!id) {
+      id = 'user_' + Math.random().toString(36).substring(2, 11);
+      localStorage.setItem('fpl_user_id', id);
+    }
+    return id;
+  });
+
   const [history, setHistory] = useState<any>(() => {
     const saved = localStorage.getItem('fpl_strategist_history') || localStorage.getItem('fpl_optimizer_history');
     return saved ? JSON.parse(saved) : {};
@@ -22,7 +31,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
   }, [history]);
 
   useEffect(() => {
-    axios.get('/api/snapshots')
+    axios.get(`/api/snapshots?userId=${userId}`)
       .then(res => {
         if (res.data?.history && typeof res.data.history === 'object' && Object.keys(res.data.history).length > 0) {
           setHistory((prev: any) => {
@@ -33,7 +42,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
         }
       })
       .catch(err => console.warn("[Snapshots API] Fetch notice:", err));
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     fetchRecommendations();
@@ -91,7 +100,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     setHistory(newHistory);
     localStorage.setItem('fpl_strategist_history', JSON.stringify(newHistory));
 
-    axios.post('/api/snapshots', { history: newHistory })
+    axios.post('/api/snapshots', { userId, history: newHistory })
       .catch(err => console.warn("[Snapshots API] Post notice:", err));
 
     return true;
