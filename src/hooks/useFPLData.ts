@@ -22,6 +22,20 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
   }, [history]);
 
   useEffect(() => {
+    axios.get('/api/snapshots')
+      .then(res => {
+        if (res.data?.history && typeof res.data.history === 'object' && Object.keys(res.data.history).length > 0) {
+          setHistory((prev: any) => {
+            const merged = { ...res.data.history, ...prev };
+            localStorage.setItem('fpl_strategist_history', JSON.stringify(merged));
+            return merged;
+          });
+        }
+      })
+      .catch(err => console.warn("[Snapshots API] Fetch notice:", err));
+  }, []);
+
+  useEffect(() => {
     fetchRecommendations();
   }, [riskMode, syncedData?.totalCost, syncedData?.bank, lockedPlayerIds, excludedPlayerIds]);
 
@@ -50,27 +64,36 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
       return false;
     }
     
+    const snapshotItem = {
+      key: mode,
+      riskMode: mode,
+      riskLabel: mode.toUpperCase(),
+      players: (currentModeData.startingXI || []).map(p => ({
+        id: p.id,
+        web_name: p.web_name,
+        score: p.score,
+        position: p.position
+      })),
+      xP: currentModeData.expectedPoints,
+      captainId: currentModeData.captain?.id,
+      viceCaptainId: currentModeData.viceCaptain?.id,
+      timestamp: Date.now()
+    };
+
     const newHistory = { ...history };
-    const gwHistory = newHistory[gwId] || { safe: null, aggressive: null, value: null };
+    const gwHistory = newHistory[gwId] || {};
     
     newHistory[gwId] = {
       ...gwHistory,
-      [mode]: {
-        players: (currentModeData.startingXI || []).map(p => ({
-          id: p.id,
-          web_name: p.web_name,
-          score: p.score,
-          position: p.position
-        })),
-        xP: currentModeData.expectedPoints,
-        captainId: currentModeData.captain?.id,
-        viceCaptainId: currentModeData.viceCaptain?.id,
-        timestamp: Date.now()
-      }
+      [mode]: snapshotItem
     };
 
     setHistory(newHistory);
     localStorage.setItem('fpl_strategist_history', JSON.stringify(newHistory));
+
+    axios.post('/api/snapshots', { history: newHistory })
+      .catch(err => console.warn("[Snapshots API] Post notice:", err));
+
     return true;
   };
 

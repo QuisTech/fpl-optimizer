@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { cn } from '../lib/utils';
-import { TrendingUp, Award, Clock } from 'lucide-react';
+import { TrendingUp, Award, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PerformanceViewProps {
   history: any;
@@ -10,6 +10,8 @@ interface PerformanceViewProps {
 export const PerformanceView = ({ history, fetchLivePoints }: PerformanceViewProps) => {
   const [actualScores, setActualScores] = useState<Record<number, Record<number, { points: number; minutes: number }>>>({});
   const [loading, setLoading] = useState<Record<number, boolean>>({});
+  const [selectedGwIndex, setSelectedGwIndex] = useState<number>(0);
+  const [viewAll, setViewAll] = useState<boolean>(false);
 
   const gws = Object.keys(history).map(Number).sort((a, b) => b - a);
 
@@ -17,7 +19,6 @@ export const PerformanceView = ({ history, fetchLivePoints }: PerformanceViewPro
     if (!actualScores[gwId]) return 0;
     let total = 0;
     
-    // Support both old 'ids' format and new 'players' metadata format
     const playerIds = snapshot.players ? snapshot.players.map((p: any) => p.id) : (snapshot.ids || []);
     const captainId = snapshot.captainId;
     const viceCaptainId = snapshot.viceCaptainId;
@@ -31,7 +32,7 @@ export const PerformanceView = ({ history, fetchLivePoints }: PerformanceViewPro
       const pData = actualScores[gwId][id];
       if (pData !== undefined) {
         total += pData.points;
-        if (id === activeCaptainId) total += pData.points; // Active Captain gets double
+        if (id === activeCaptainId) total += pData.points;
       }
     });
     return total;
@@ -70,10 +71,99 @@ export const PerformanceView = ({ history, fetchLivePoints }: PerformanceViewPro
     );
   }
 
+  const activeGwIndex = Math.min(selectedGwIndex, gws.length - 1);
+  const visibleGws = viewAll ? gws : [gws[activeGwIndex] || gws[0]];
+
   return (
-    <div className="space-y-6 overflow-y-auto pr-2 custom-scrollbar">
-      {gws.map(gwId => {
-        const modes = history[gwId];
+    <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar">
+      {/* Gameweek Enveloped Chevron Navigator */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-950/70 p-3 rounded-2xl border border-fpl-border/60">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl bg-fpl-green/10 border border-fpl-green/30 flex items-center justify-center text-fpl-green shadow-inner">
+            <Award className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-xs font-black text-white uppercase tracking-wider">
+              Performance Analysis
+            </h3>
+            <p className="text-[10px] text-slate-400 font-mono">
+              {gws.length} Gameweek{gws.length > 1 ? 's' : ''} Tracked
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between sm:justify-end gap-2">
+          {/* User Requested Enveloped Chevron Bar */}
+          <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-lg border border-fpl-border/50">
+            <button 
+              onClick={() => {
+                setViewAll(false);
+                setSelectedGwIndex(prev => Math.min(gws.length - 1, prev + 1));
+              }}
+              disabled={viewAll || activeGwIndex >= gws.length - 1}
+              className="p-0.5 rounded text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors" 
+              title="Previous Gameweek"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+
+            <span className="text-[8.5px] font-mono text-emerald-400 font-bold px-1.5 select-none">
+              {viewAll ? `GWs ${gws[gws.length - 1]}–${gws[0]}` : `GW ${gws[activeGwIndex]}`}
+            </span>
+
+            <button 
+              onClick={() => {
+                setViewAll(false);
+                setSelectedGwIndex(prev => Math.max(0, prev - 1));
+              }}
+              disabled={viewAll || activeGwIndex <= 0}
+              className="p-0.5 rounded text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors" 
+              title="Next Gameweek"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Gameweek Quick Pills */}
+          {gws.length > 1 && (
+            <div className="hidden md:flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+              {gws.map((gw, idx) => (
+                <button
+                  key={gw}
+                  onClick={() => {
+                    setViewAll(false);
+                    setSelectedGwIndex(idx);
+                  }}
+                  className={cn(
+                    "px-2 py-0.5 rounded text-[9px] font-mono font-bold transition-all",
+                    !viewAll && activeGwIndex === idx 
+                      ? "bg-fpl-green text-slate-950 shadow-sm" 
+                      : "text-slate-400 hover:text-white hover:bg-slate-900"
+                  )}
+                >
+                  GW{gw}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Toggle View All */}
+          {gws.length > 1 && (
+            <button
+              onClick={() => setViewAll(!viewAll)}
+              className={cn(
+                "text-[9px] font-mono font-black px-2.5 py-1 rounded-lg border transition-all uppercase tracking-wider",
+                viewAll ? "bg-fpl-purple/20 text-fpl-purple border-fpl-purple/40" : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white"
+              )}
+            >
+              {viewAll ? "Single GW" : "View All"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {visibleGws.map(gwId => {
+        const modes = history[gwId] || {};
         return (
           <div key={gwId} className="bg-slate-950/40 border border-fpl-border rounded-2xl p-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
@@ -84,7 +174,7 @@ export const PerformanceView = ({ history, fetchLivePoints }: PerformanceViewPro
               <button 
                 onClick={() => refreshActuals(gwId)}
                 disabled={loading[gwId]}
-                className="text-[9px] font-black uppercase tracking-widest bg-fpl-purple px-3 py-1 rounded-lg hover:bg-fpl-purple/80 transition-colors disabled:opacity-50 w-full sm:w-auto"
+                className="text-[9px] font-black uppercase tracking-widest bg-fpl-purple px-3 py-1 rounded-lg hover:bg-fpl-purple/80 transition-colors disabled:opacity-50 w-full sm:w-auto text-white font-bold"
               >
                 {loading[gwId] ? 'FETCHING...' : 'REFRESH ACTUALS'}
               </button>
@@ -109,10 +199,10 @@ export const PerformanceView = ({ history, fetchLivePoints }: PerformanceViewPro
                   <div key={mode} className="bg-card-bg border border-fpl-border rounded-xl p-4 transition-all">
                     <div className="flex justify-between items-start mb-3">
                       <p className={cn(
-                        "text-[9px] font-black uppercase tracking-widest",
-                        mode === 'aggressive' ? "text-orange-400" : 
-                        mode === 'value' ? "text-cyan-400" : 
-                        "text-fpl-green"
+                        "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border inline-block",
+                        mode === 'aggressive' ? "bg-orange-500/20 text-orange-400 border-orange-500/30" : 
+                        mode === 'value' ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" : 
+                        "bg-fpl-green/20 text-fpl-green border-fpl-green/30"
                       )}>{mode}</p>
                       
                       <button 
