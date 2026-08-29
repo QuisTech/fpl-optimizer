@@ -48,7 +48,7 @@ const FPL_BASE_URL = 'https://fantasy.premierleague.com/api/bootstrap-static/';
     console.log(`[Deadline Sniper] Gameweek ${nextEvent.id} deadline is at ${nextEvent.deadline_time}.`);
     console.log(`[Deadline Sniper] Time until deadline: ${hoursUntilDeadline.toFixed(2)} hours.`);
 
-    if (hoursUntilDeadline > 0.9 && hoursUntilDeadline <= 2.1) {
+    if (hoursUntilDeadline > 0.25 && hoursUntilDeadline <= 2.5) {
       console.log('✅ [Deadline Sniper] GOLDEN WINDOW REACHED! Time to fetch live data.');
       if (process.env.GITHUB_OUTPUT) {
         fs.appendFileSync(process.env.GITHUB_OUTPUT, 'should_run=true\n');

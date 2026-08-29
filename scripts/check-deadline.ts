@@ -35,7 +35,7 @@ const FPL_BASE_URL = 'https://fantasy.premierleague.com/api/bootstrap-static/';
     // 3. Trigger Window: 0.9 to 2.1 hours before deadline.
     // Width of 1.2 hours ensures that even with 5-10 minutes of GitHub Actions cron trigger latency, 
     // we never miss the execution opportunity.
-    if (hoursUntilDeadline > 0.9 && hoursUntilDeadline <= 2.1) {
+    if (hoursUntilDeadline > 0.25 && hoursUntilDeadline <= 2.5) {
       console.log('✅ [Deadline Sniper] GOLDEN WINDOW REACHED! Time to fetch live data.');
       process.exit(0); // Exit 0 tells GitHub Actions to proceed to the next step
     } else {
