@@ -10,18 +10,73 @@ import { DataGrid } from './components/DataGrid';
 import { TransferView } from './components/TransferView';
 import { ChipAdvisor } from './components/ChipAdvisor';
 import { PerformanceView } from './components/PerformanceView';
+import { BacktestDashboard } from './components/BacktestDashboard';
 import { FixtureList } from './components/FixtureList';
 import { OptimizerPositioning } from './components/OptimizerPositioning';
+import { AuthModal } from './components/AuthModal';
+import { AIAgentView } from './components/AIAgentView';
 import { Camera } from 'lucide-react';
 import { cn } from './lib/utils';
+import { auth, onAuthStateChanged, signOut, signInAnonymously } from './lib/firebase';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import axios from 'axios';
+
+// Configure Axios to automatically attach Firebase JWT to all outgoing requests
+axios.interceptors.request.use(async (config) => {
+  if (auth.currentUser) {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      config.headers.Authorization = `Bearer ${token}`;
+    } catch (e) {
+      console.error("Failed to get auth token", e);
+    }
+  }
+  return config;
+});
+
+import { AdminLayout } from './components/AdminLayout';
+import { UsersPage } from './pages/admin/UsersPage';
+import { BetaPage } from './pages/admin/BetaPage';
+import { AnalyticsPage } from './pages/admin/AnalyticsPage';
+import { FeatureFlagsPage } from './pages/admin/FeatureFlagsPage';
+import { FPLTrackerPage } from './pages/admin/FPLTrackerPage';
 
 import { SnapshotToast, SnapshotToastData } from './components/SnapshotToast';
+import { SnapshotModal } from './components/SnapshotModal';
 
-export default function App() {
+function FPLApp() {
   const [riskMode, setRiskMode] = useState<'safe' | 'aggressive' | 'value'>('safe');
-  const [tab, setTab] = useState<'optimizer' | 'pitch' | 'picks' | 'transfers' | 'chips' | 'performance'>('optimizer');
+  const [fuel, setFuel] = useState<'fplform' | 'native' | 'eye-test'>('fplform');
+  const [tab, setTab] = useState<'optimizer' | 'pitch' | 'picks' | 'transfers' | 'chips' | 'performance' | 'backtest' | 'agent'>('optimizer');
   const [snapshotToast, setSnapshotToast] = useState<SnapshotToastData | null>(null);
-  
+  const [isSnapshotModalOpen, setIsSnapshotModalOpen] = useState(false);
+
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [profileTab, setProfileTab] = useState<string | null>(null);
+  const [authUser, setAuthUser] = useState<any>(null);
+  const [authInitialized, setAuthInitialized] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setAuthUser(user);
+      } else {
+        // Automatically sign in anonymously if no user is found
+        try {
+          const cred = await signInAnonymously(auth);
+          setAuthUser(cred.user);
+        } catch (e) {
+          console.error("Anonymous auth failed", e);
+        }
+      }
+      setAuthInitialized(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const activeUserId = authUser?.uid || '';
+
   const { 
     data, 
     loading, 
@@ -35,29 +90,56 @@ export default function App() {
     history,
     takeSnapshot,
     fetchLivePoints,
+    tier,
+    isTeamIdLocked,
+    activeScenario,
+    setActiveScenario,
     lockedPlayerIds,
     excludedPlayerIds,
     toggleLock,
     toggleExclude,
     clearConstraints
-  } = useFPLData(riskMode);
+  } = useFPLData(riskMode, fuel, activeUserId, authInitialized);
+
+  const isSuperAdmin = (authUser?.email || '').toLowerCase().trim() === 'michquis@gmail.com' || tier === 'admin';
 
   const handleSync = async () => {
+    if (!isSuperAdmin && tier !== 'free' && tier !== 'admin' && !isTeamIdLocked) {
+      alert("Premium Account: Please link your FPL Team ID in your Settings profile before running an analysis.");
+      if (authUser) setProfileTab('fpl');
+      else setIsAuthModalOpen(true);
+      return;
+    }
     const success = await syncTeam();
     if (success) setTab('transfers');
   };
 
-  const handleSnapshot = () => {
+  const executeManualSnapshot = async () => {
     if (data) {
-      const success = takeSnapshot(data.nextEventId, data, riskMode);
+      const success = await takeSnapshot(data.nextEventId, data, riskMode, fuel, activeScenario);
       if (success) {
+        const scenarioLabel = activeScenario === 'quant' ? 'Quant Optimal' : 'Risky Template Shield';
+        const fuelLabel = fuel === 'eye-test' ? 'Eye Test' : fuel === 'native' ? 'Native FPL' : 'FPLForm';
+        
         setSnapshotToast({
           gwId: data.nextEventId,
+          fuel,
+          scenario: activeScenario,
           riskMode,
+          fuelLabel,
+          scenarioLabel,
           riskLabel: riskMode.toUpperCase(),
           timestamp: Date.now()
         });
       }
+    }
+  };
+
+  const handleSnapshotClick = () => {
+    if (isSuperAdmin) {
+      setIsSnapshotModalOpen(true);
+    } else {
+      executeManualSnapshot();
     }
   };
 
@@ -79,10 +161,9 @@ export default function App() {
       )}
       <div className="max-w-[1400px] mx-auto grid grid-cols-12 gap-4 auto-rows-min">
 
-        
-        <Header data={data} riskMode={riskMode} setRiskMode={setRiskMode} />
+        <Header data={data} riskMode={riskMode} setRiskMode={setRiskMode} fuel={fuel} setFuel={setFuel} authUser={authUser} tier={tier} onOpenAuth={() => setIsAuthModalOpen(true)} onSignOut={() => signOut(auth)} setTeamId={setTeamId} profileTab={profileTab} setProfileTab={setProfileTab} />
 
-        <MetricsColumn data={data} syncedData={syncedData} riskMode={riskMode} />
+        <MetricsColumn data={data} syncedData={syncedData} riskMode={riskMode} tab={tab} />
 
         {/* Primary Content Area */}
         <div className="col-span-12 lg:col-span-6 bg-card-bg border border-fpl-border rounded-3xl overflow-hidden relative shadow-xl min-h-[600px]">
@@ -91,34 +172,45 @@ export default function App() {
           <div className="relative z-10 p-4 sm:p-6 h-full flex flex-col">
             <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between mb-8">
               <div className="flex flex-wrap gap-1 bg-slate-950 p-1 rounded-xl border border-fpl-border w-full md:w-auto justify-center">
-                {(['optimizer', 'pitch', 'picks', 'transfers', 'chips', 'performance'] as const).map((t) => (
+                {(['optimizer', 'pitch', 'picks', 'transfers', 'chips', 'performance', 'backtest', 'agent'] as const).map((t) => (
                   <button 
                     key={t}
                     onClick={() => setTab(t)}
                     className={cn(
-                      "px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all",
-                      tab === t ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-300"
+                      "px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all",
+                      tab === t 
+                        ? "bg-fpl-green text-slate-950 shadow-[0_0_15px_rgba(0,255,133,0.3)]" 
+                        : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
                     )}
                   >{t}</button>
                 ))}
               </div>
               <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 w-full md:w-auto">
-                {tab === 'pitch' && data && (
-                  <button 
-                    onClick={handleSnapshot}
-                    className="flex items-center gap-2 bg-slate-900 border border-fpl-border rounded-lg px-3 py-1 text-[9px] font-black uppercase tracking-widest text-white hover:bg-slate-800 transition-all mr-2 sm:mr-4"
-                  >
-                    <Camera className="w-3 h-3 text-fpl-green" />
-                    Snapshot
-                  </button>
-                )}
+                <button 
+                  onClick={handleSnapshotClick}
+                  className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-1.5 bg-slate-900 border border-fpl-border rounded-xl text-xs font-black uppercase text-slate-300 hover:text-white hover:bg-slate-800 transition-colors shadow-sm"
+                  title="Save current recommendations to track performance after the gameweek"
+                >
+                  <Camera className="w-3.5 h-3.5 text-fpl-green" />
+                  <span>Snapshot</span>
+                </button>
                 <div className="flex items-center gap-2">
                   <input 
                     type="text" 
-                    placeholder="TEAM ID" 
+                    placeholder={!isSuperAdmin && tier !== 'free' && tier !== 'admin' && !isTeamIdLocked ? "LINK ID" : "TEAM ID"} 
                     value={teamId}
                     onChange={(e) => setTeamId(e.target.value)}
-                    className="bg-slate-950 border border-fpl-border rounded-lg px-3 py-1 text-[10px] font-mono text-fpl-green w-24 focus:outline-none focus:border-fpl-green"
+                    disabled={!isSuperAdmin && tier !== 'free' && tier !== 'admin' && isTeamIdLocked}
+                    onClick={() => {
+                      if (!isSuperAdmin && tier !== 'free' && tier !== 'admin' && !isTeamIdLocked) {
+                        if (authUser) setProfileTab('fpl');
+                        else setIsAuthModalOpen(true);
+                      }
+                    }}
+                    className={cn("bg-slate-950 border border-fpl-border rounded-lg px-3 py-1 text-[10px] font-mono text-fpl-green w-24 focus:outline-none focus:border-fpl-green",
+                      !isSuperAdmin && tier !== 'free' && tier !== 'admin' && isTeamIdLocked ? "opacity-50 cursor-not-allowed" : "",
+                      !isSuperAdmin && tier !== 'free' && tier !== 'admin' && !isTeamIdLocked ? "cursor-pointer hover:bg-slate-900 text-rose-400" : ""
+                    )}
                   />
                   <button 
                     onClick={handleSync}
@@ -133,17 +225,38 @@ export default function App() {
 
             <AnimatePresence mode="wait">
               {tab === 'optimizer' ? (
-                <OptimizerPositioning />
+                <OptimizerPositioning userId={activeUserId} currentTier={tier} />
               ) : tab === 'pitch' ? (
-                <PitchView data={data} formation={formation} lockedPlayerIds={lockedPlayerIds} excludedPlayerIds={excludedPlayerIds} onToggleLock={toggleLock} onToggleExclude={toggleExclude} onClearConstraints={clearConstraints} />
+                <PitchView 
+                  data={data} 
+                  syncedData={syncedData}
+                  formation={formation} 
+                  activeScenario={activeScenario}
+                  onSelectScenario={setActiveScenario}
+                  lockedPlayerIds={lockedPlayerIds}
+                  excludedPlayerIds={excludedPlayerIds}
+                  onToggleLock={toggleLock}
+                  onToggleExclude={toggleExclude}
+                  onClearConstraints={clearConstraints}
+                />
               ) : tab === 'picks' ? (
-                <DataGrid data={data} lockedPlayerIds={lockedPlayerIds} excludedPlayerIds={excludedPlayerIds} onToggleLock={toggleLock} onToggleExclude={toggleExclude} />
+                <DataGrid 
+                  data={data} 
+                  lockedPlayerIds={lockedPlayerIds}
+                  excludedPlayerIds={excludedPlayerIds}
+                  onToggleLock={toggleLock}
+                  onToggleExclude={toggleExclude}
+                />
               ) : tab === 'transfers' ? (
-                <TransferView syncedData={syncedData} />
+                <TransferView syncedData={syncedData} tier={tier} setTab={setTab} userId={activeUserId} />
               ) : tab === 'performance' ? (
                 <PerformanceView history={history} fetchLivePoints={fetchLivePoints} />
+              ) : tab === 'backtest' ? (
+                <BacktestDashboard initialFuel={fuel} />
+              ) : tab === 'chips' ? (
+                <ChipAdvisor syncedData={syncedData} tier={tier} setTab={setTab} userId={activeUserId} />
               ) : (
-                <ChipAdvisor syncedData={syncedData} />
+                <AIAgentView syncedData={syncedData} optimalData={data} tier={tier} userId={activeUserId} riskMode={riskMode} fuel={fuel} />
               )}
             </AnimatePresence>
           </div>
@@ -173,7 +286,38 @@ export default function App() {
           <FixtureList data={data} />
         </div>
       </div>
-      <SnapshotToast toast={snapshotToast} onClose={() => setSnapshotToast(null)} />
+      <AuthModal 
+        isOpen={isAuthModalOpen} 
+        onClose={() => setIsAuthModalOpen(false)} 
+        anonymousId={activeUserId}
+      />
+      <SnapshotToast 
+        toast={snapshotToast} 
+        onClose={() => setSnapshotToast(null)} 
+      />
+      <SnapshotModal 
+        isOpen={isSnapshotModalOpen}
+        onClose={() => setIsSnapshotModalOpen(false)}
+        onTakeManualSnapshot={executeManualSnapshot}
+      />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<FPLApp />} />
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Navigate to="analytics" replace />} />
+          <Route path="users" element={<UsersPage />} />
+          <Route path="fpl-tracker" element={<FPLTrackerPage />} />
+          <Route path="beta" element={<BetaPage />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="features" element={<FeatureFlagsPage />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }
