@@ -151,7 +151,7 @@ export const PitchView = ({
               Gameweek {nextGw}
             </span>
             <span className="text-[10px] sm:text-xs font-bold text-white truncate">
-              {managerInfo?.teamName ? managerInfo.teamName : (activeScenario === 'template' ? 'Risky Template Shield' : 'Quant Optimal Lineup')}
+              {managerInfo?.teamName ? managerInfo.teamName : 'Optimizer Lineup'}
             </span>
           </div>
 
