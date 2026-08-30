@@ -71,8 +71,22 @@ export class Simulator {
     return { score: gwScore, variance: gwVariance };
   }
 
+    private getChipResidual(chip: string, gw: number): number {
+    const remaining = Math.max(0, 38 - gw);
+    if (chip === 'WC') return 28.0 * (0.4 + 0.6 * (remaining / 38));
+    if (chip === 'FH') return 22.0 * (0.4 + 0.6 * (remaining / 38));
+    if (chip === 'BB') return 26.0 * (0.5 + 0.5 * (remaining / 38));
+    if (chip === 'TC') return 18.0 * (0.5 + 0.5 * (remaining / 38));
+    return 0;
+  }
+
   public calculateFitness(state: SquadState): number {
-    return state.accumulatedScore;
+    let fitness = state.accumulatedScore;
+    fitness += (state.chipState['WC'] || 0) * this.getChipResidual('WC', state.gameweek || 1);
+    fitness += (state.chipState['FH'] || 0) * this.getChipResidual('FH', state.gameweek || 1);
+    fitness += (state.chipState['BB'] || 0) * this.getChipResidual('BB', state.gameweek || 1);
+    fitness += (state.chipState['TC'] || 0) * this.getChipResidual('TC', state.gameweek || 1);
+    return fitness;
   }
 
   public generateValidActions(
@@ -96,8 +110,17 @@ export class Simulator {
       if (state.chipState['FH'] > 0) {
         actions.push({ type: 'CHIP', chipName: 'FH', hitCost: 0 });
       }
+      // Only evaluate Bench Boost if bench has genuine Double Gameweek / explosive EV (>= 16.0 xP)
       if (state.chipState['BB'] > 0) {
-        actions.push({ type: 'CHIP', chipName: 'BB', hitCost: 0 });
+        const playerProjections = state.squad.map(id => ({ id, xp: oracle.getXP(id, gw), pos: oracle.getPosition(id) }));
+        const gkps = playerProjections.filter(p => p.pos === 'GKP').sort((a, b) => b.xp - a.xp);
+        const outfielders = playerProjections.filter(p => p.pos !== 'GKP').sort((a, b) => b.xp - a.xp);
+        const starters = [...(gkps.length > 0 ? [gkps[0]] : []), ...outfielders.slice(0, 10)];
+        const starterIds = new Set(starters.map(s => s.id));
+        const benchXp = playerProjections.filter(p => !starterIds.has(p.id)).reduce((sum, p) => sum + p.xp, 0);
+        if (benchXp >= 16.0) {
+          actions.push({ type: 'CHIP', chipName: 'BB', hitCost: 0 });
+        }
       }
       if (state.chipState['TC'] > 0) {
         actions.push({ type: 'CHIP', chipName: 'TC', hitCost: 0 });
