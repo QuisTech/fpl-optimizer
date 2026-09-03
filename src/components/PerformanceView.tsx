@@ -181,92 +181,168 @@ export const PerformanceView = ({ history, fetchLivePoints }: PerformanceViewPro
             </div>
 
             <div className="flex flex-col gap-4">
-              {(['safe', 'aggressive', 'value'] as const).map(mode => {
-                const data = modes[mode];
-                if (!data) return null;
-                
-                const normalizedXP = data.xP || 0;
-                const actual = calculateActual(gwId, data);
-                const diff = actual - normalizedXP;
-                const hasStarted = actual > 0;
-                const isExpanded = !!expandedModes[`${gwId}-${mode}`];
-                
-                const activeCaptainId = data.captainId && actualScores[gwId]?.[data.captainId]?.minutes === 0 
-                  ? data.viceCaptainId 
-                  : data.captainId;
+              {(() => {
+                const availableKeys = ['safe', 'aggressive', 'value', 'user_synced_squad'];
+                const entries = availableKeys
+                  .map(key => {
+                    const data = modes[key];
+                    if (!data) return null;
+                    const normalizedXP = data.xP || 0;
+                    const actual = calculateActual(gwId, data);
+                    const diff = actual - normalizedXP;
+                    const hasStarted = actual > 0;
+                    return {
+                      key,
+                      data,
+                      normalizedXP,
+                      actual,
+                      diff,
+                      hasStarted
+                    };
+                  })
+                  .filter((item): item is NonNullable<typeof item> => item !== null);
 
-                return (
-                  <div key={mode} className="bg-card-bg border border-fpl-border rounded-xl p-4 transition-all">
-                    <div className="flex justify-between items-start mb-3">
-                      <p className={cn(
-                        "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border inline-block",
-                        mode === 'aggressive' ? "bg-orange-500/20 text-orange-400 border-orange-500/30" : 
-                        mode === 'value' ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" : 
-                        "bg-fpl-green/20 text-fpl-green border-fpl-green/30"
-                      )}>{mode}</p>
-                      
-                      <button 
-                        onClick={() => toggleExpand(gwId, mode)}
-                        className="text-[8px] text-slate-500 hover:text-white uppercase font-bold tracking-tighter"
-                      >
-                        {isExpanded ? '[ HIDE SQUAD ]' : '[ VIEW SQUAD ]'}
-                      </button>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-2 sm:gap-6">
-                      <div>
-                        <p className="text-[8px] text-slate-500 uppercase font-medium">Expected</p>
-                        <p className="text-sm sm:text-lg font-black text-white">{normalizedXP.toFixed(1)} <span className="text-[9px] sm:text-[10px] font-normal text-slate-500">xP</span></p>
-                      </div>
-                      
-                      <div>
-                        <p className="text-[8px] text-slate-500 uppercase font-medium">Actual</p>
-                        <p className="text-sm sm:text-lg font-black text-white">
-                          {actualScores[gwId] ? actual.toFixed(0) : '--'}
-                          <span className="text-[9px] sm:text-[10px] font-normal text-slate-500 ml-1">pts</span>
-                        </p>
-                      </div>
+                // Sort: Pre-match (actual === 0), rank by highest expected points. Post-kickoff, rank by actual points.
+                const sortedEntries = [...entries].sort((a, b) => {
+                  if (a.actual === 0 && b.actual === 0) {
+                    return b.normalizedXP - a.normalizedXP;
+                  }
+                  const actualDiff = b.actual - a.actual;
+                  if (actualDiff !== 0) return actualDiff;
+                  const scoreDiff = b.diff - a.diff;
+                  if (scoreDiff !== 0) return scoreDiff;
+                  return b.normalizedXP - a.normalizedXP;
+                });
 
-                      <div className="flex flex-col justify-center">
-                        {hasStarted ? (
-                          <div className={cn(
-                            "flex items-center gap-0.5 sm:gap-1 text-[9px] sm:text-[10px] font-black",
-                            diff >= 0 ? "text-fpl-green" : "text-fpl-pink"
+                return sortedEntries.map(({ key, data, normalizedXP, actual, diff, hasStarted }, rankIndex) => {
+                  const isExpanded = !!expandedModes[`${gwId}-${key}`];
+                  const isUserSquad = !!data.isUserSquad || key === 'user_synced_squad';
+                  const activeCaptainId = data.captainId && actualScores[gwId]?.[data.captainId]?.minutes === 0 
+                    ? data.viceCaptainId 
+                    : data.captainId;
+
+                  return (
+                    <div 
+                      key={key} 
+                      className={cn(
+                        "relative bg-card-bg border rounded-xl p-4 transition-all",
+                        isUserSquad 
+                          ? "border-emerald-500/70 bg-gradient-to-r from-emerald-500/[0.08] via-card-bg to-card-bg ring-1 ring-emerald-400/30 shadow-[0_0_20px_rgba(16,185,129,0.12)]" 
+                          : "border-fpl-border"
+                      )}
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* Rank Badge */}
+                          <span className={cn(
+                            "text-[8.5px] font-mono font-black px-2 py-0.5 rounded-md border flex items-center gap-0.5",
+                            rankIndex === 0 ? "bg-amber-400/20 text-amber-300 border-amber-400/40" :
+                            rankIndex === 1 ? "bg-slate-300/20 text-slate-200 border-slate-300/40" :
+                            rankIndex === 2 ? "bg-amber-700/20 text-amber-400 border-amber-700/40" :
+                            "bg-slate-900 text-slate-500 border-slate-800"
                           )}>
-                            <TrendingUp className={cn("w-2.5 h-2.5 sm:w-3 sm:h-3", diff < 0 && "rotate-180")} />
-                            {diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)} <span className="hidden sm:inline">vs xP</span>
-                          </div>
-                        ) : (
-                          <span className="text-[8px] text-slate-600 font-mono uppercase tracking-tighter">
-                            {data.timestamp ? new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'No Time'}
+                            {rankIndex === 0 ? '🥇 #1' : rankIndex === 1 ? '🥈 #2' : rankIndex === 2 ? '🥉 #3' : `#${rankIndex + 1}`}
                           </span>
-                        )}
-                      </div>
-                    </div>
 
-                    {isExpanded && data.players && (
-                      <div className="mt-4 pt-4 border-t border-fpl-border grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                        {data.players.map((p: any) => (
-                          <div key={p.id} className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[8px] text-slate-600 w-6 font-bold">{p.position}</span>
-                              <span className={cn(
-                                "text-[10px] font-bold",
-                                p.id === data.captainId ? "text-fpl-green" : p.id === data.viceCaptainId ? "text-fpl-pink" : "text-slate-300"
-                              )}>
-                                {p.web_name} {p.id === data.captainId && '(C)'} {p.id === data.viceCaptainId && '(V)'}
-                              </span>
+                          {/* Mode / Team Badge */}
+                          <p className={cn(
+                            "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border inline-block",
+                            isUserSquad ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 border-emerald-400 font-black shadow-sm" :
+                            key === 'aggressive' ? "bg-orange-500/20 text-orange-400 border-orange-500/30" : 
+                            key === 'value' ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" : 
+                            "bg-fpl-green/20 text-fpl-green border-fpl-green/30"
+                          )}>
+                            {isUserSquad ? '👤 My Synced Squad' : key}
+                          </p>
+
+                          {isUserSquad && (
+                            <span className="text-[8.5px] font-bold text-emerald-400/90 font-mono">
+                              {data.teamName || 'Synced FPL Squad'}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <button 
+                          onClick={() => toggleExpand(gwId, key)}
+                          className="text-[8px] text-slate-500 hover:text-white uppercase font-bold tracking-tighter"
+                        >
+                          {isExpanded ? '[ HIDE SQUAD ]' : '[ VIEW SQUAD ]'}
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-2 sm:gap-6">
+                        <div>
+                          <p className="text-[8px] text-slate-500 uppercase font-medium">Expected</p>
+                          <p className="text-sm sm:text-lg font-black text-white">{normalizedXP.toFixed(1)} <span className="text-[9px] sm:text-[10px] font-normal text-slate-500">xP</span></p>
+                        </div>
+                        
+                        <div>
+                          <p className="text-[8px] text-slate-500 uppercase font-medium">Actual</p>
+                          <p className="text-sm sm:text-lg font-black text-white">
+                            {actualScores[gwId] ? actual.toFixed(0) : '--'}
+                            <span className="text-[9px] sm:text-[10px] font-normal text-slate-500 ml-1">pts</span>
+                          </p>
+                        </div>
+
+                        <div className="flex flex-col justify-center">
+                          {hasStarted ? (
+                            <div className={cn(
+                              "flex items-center gap-0.5 sm:gap-1 text-[9px] sm:text-[10px] font-black",
+                              diff >= 0 ? "text-fpl-green" : "text-fpl-pink"
+                            )}>
+                              <TrendingUp className={cn("w-2.5 h-2.5 sm:w-3 sm:h-3", diff < 0 && "rotate-180")} />
+                              {diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)} <span className="hidden sm:inline">vs xP</span>
                             </div>
-                            <span className="text-[9px] font-mono text-slate-500">
-                              {actualScores[gwId]?.[p.id] !== undefined ? `${actualScores[gwId][p.id].points}${p.id === activeCaptainId ? 'x2' : ''} pts` : '--'}
+                          ) : (
+                            <span className="text-[8px] text-slate-600 font-mono uppercase tracking-tighter">
+                              Upcoming
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expandable Squad Details */}
+                      {isExpanded && data.players && (
+                        <div className="mt-4 pt-3 border-t border-slate-800/80">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[8px] font-mono text-slate-400 uppercase tracking-wider font-bold">
+                              {isUserSquad ? 'Manager Starting XI & Captaincy' : 'Locked Starting Lineup'}
+                            </span>
+                            <span className="text-[8px] font-mono text-slate-500">
+                              {data.timestamp ? new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                             </span>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                            {data.players.map((player: any) => {
+                              const pScore = actualScores[gwId]?.[player.id];
+                              const isCaptain = player.id === activeCaptainId;
+                              const isVice = player.id === data.viceCaptainId;
+                              
+                              return (
+                                <div key={player.id} className="bg-slate-950/60 border border-slate-800/60 rounded p-1.5 flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5 overflow-hidden">
+                                    <span className="text-[7.5px] font-mono px-1 py-0.2 bg-slate-900 text-slate-400 rounded">
+                                      {player.position}
+                                    </span>
+                                    <span className="text-[9px] text-slate-200 truncate font-medium">
+                                      {player.web_name}
+                                      {isCaptain && <span className="text-amber-400 font-bold ml-0.5">(C)</span>}
+                                      {isVice && <span className="text-slate-400 font-bold ml-0.5">(V)</span>}
+                                    </span>
+                                  </div>
+                                  <span className="text-[9px] font-mono font-bold text-white ml-1 shrink-0">
+                                    {pScore !== undefined ? (pScore.points * (isCaptain ? 2 : 1)) : '--'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         );

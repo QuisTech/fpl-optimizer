@@ -107,6 +107,32 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
       [mode]: snapshotItem
     };
 
+    if (syncedData && syncedData.squad && syncedData.squad.length >= 11) {
+      const startingXI = syncedData.squad.filter(p => (p.position_in_squad ?? 0) <= 11);
+      const captain = syncedData.squad.find(p => p.isCaptain || p.is_captain) || (startingXI.length > 0 ? startingXI[0] : null);
+      const viceCaptain = syncedData.squad.find(p => p.isViceCaptain || p.is_vice_captain);
+      const captainBonus = captain ? (captain.xP || 0) : 0;
+      const startingTotalXp = startingXI.reduce((sum, p) => sum + (p.xP || 0), 0) + captainBonus;
+
+      newHistory[gwId]['user_synced_squad'] = {
+        key: 'user_synced_squad',
+        riskMode: 'user',
+        riskLabel: 'HUMAN',
+        teamName: syncedData.managerInfo?.teamName || 'Synced FPL Squad',
+        isUserSquad: true,
+        players: startingXI.map(p => ({
+          id: p.id,
+          web_name: p.web_name,
+          score: p.xP || p.score || 0,
+          position: p.position
+        })),
+        xP: Math.round(startingTotalXp * 10) / 10,
+        captainId: captain?.id,
+        viceCaptainId: viceCaptain?.id,
+        timestamp: Date.now()
+      };
+    }
+
     setHistory(newHistory);
     localStorage.setItem('fpl_strategist_history', JSON.stringify(newHistory));
 
