@@ -77,12 +77,15 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     }
   };
 
-  const takeSnapshot = (gwId: number, currentModeData: RecommendationResponse, mode: string) => {
+  const takeSnapshot = async (gwId: number, currentModeData: RecommendationResponse, mode: string) => {
     if (!gwId || !currentModeData) {
       console.warn("[Snapshot] Missing GW ID or Data");
       return false;
     }
+
+    const now = Date.now();
     
+    // 1. Snapshot the active mode
     const snapshotItem = {
       key: mode,
       riskMode: mode,
@@ -96,17 +99,14 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
       xP: currentModeData.expectedPoints,
       captainId: currentModeData.captain?.id,
       viceCaptainId: currentModeData.viceCaptain?.id,
-      timestamp: Date.now()
+      timestamp: now
     };
 
     const newHistory = { ...history };
-    const gwHistory = newHistory[gwId] || {};
-    
-    newHistory[gwId] = {
-      ...gwHistory,
-      [mode]: snapshotItem
-    };
+    const gwHistory = { ...(newHistory[gwId] || {}) };
+    gwHistory[mode] = snapshotItem;
 
+    // 2. Snapshot the user's synced Starting XI if squad is synced
     if (syncedData && syncedData.squad && syncedData.squad.length >= 11) {
       const startingXI = syncedData.squad.filter(p => (p.position_in_squad ?? 0) <= 11);
       const captain = syncedData.squad.find(p => p.isCaptain || p.is_captain) || (startingXI.length > 0 ? startingXI[0] : null);
@@ -114,7 +114,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
       const captainBonus = captain ? (captain.xP || 0) : 0;
       const startingTotalXp = startingXI.reduce((sum, p) => sum + (p.xP || 0), 0) + captainBonus;
 
-      newHistory[gwId]['user_synced_squad'] = {
+      gwHistory['user_synced_squad'] = {
         key: 'user_synced_squad',
         riskMode: 'user',
         riskLabel: 'HUMAN',
@@ -129,15 +129,58 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
         xP: Math.round(startingTotalXp * 10) / 10,
         captainId: captain?.id,
         viceCaptainId: viceCaptain?.id,
-        timestamp: Date.now()
+        timestamp: now
       };
     }
 
+    // Immediately commit the active mode + user squad so UI updates instantly
+    newHistory[gwId] = gwHistory;
     setHistory(newHistory);
     localStorage.setItem('fpl_strategist_history', JSON.stringify(newHistory));
 
-    axios.post('/api/snapshots', { userId: effectiveKey, history: newHistory })
-      .catch(err => console.warn("[Snapshots API] Post notice:", err));
+    // 3. Concurrently fetch and snapshot the other AI modes so all 3 modes (safe, aggressive, value) are captured!
+    const otherModes = (['safe', 'aggressive', 'value'] as const).filter(m => m !== mode);
+    const budgetQuery = syncedData ? `&budget=${(syncedData.totalCost || 0) + (syncedData.bank || 0)}` : '';
+    const lockedQuery = (typeof lockedPlayerIds !== 'undefined' && (lockedPlayerIds || []).length > 0) ? `&locked=${lockedPlayerIds.join(',')}` : '';
+    const excludedQuery = (typeof excludedPlayerIds !== 'undefined' && (excludedPlayerIds || []).length > 0) ? `&excluded=${excludedPlayerIds.join(',')}` : '';
+    const userQuery = '';
+
+    try {
+      const results = await Promise.allSettled(
+        otherModes.map(m => axios.get(`/api/recommendations?riskMode=${m}${budgetQuery}${lockedQuery}${excludedQuery}`))
+      );
+
+      results.forEach((res, idx) => {
+        const m = otherModes[idx];
+        if (res.status === 'fulfilled' && res.value?.data?.startingXI) {
+          const d = res.value.data;
+          gwHistory[m] = {
+            key: m,
+            riskMode: m,
+            riskLabel: m.toUpperCase(),
+            players: d.startingXI.map((player: any) => ({
+              id: player.id,
+              web_name: player.web_name,
+              score: player.score,
+              position: player.position
+            })),
+            xP: d.expectedPoints,
+            captainId: d.captain?.id,
+            viceCaptainId: d.viceCaptain?.id,
+            timestamp: now
+          };
+        }
+      });
+
+      newHistory[gwId] = { ...gwHistory };
+      setHistory({ ...newHistory });
+      localStorage.setItem('fpl_strategist_history', JSON.stringify(newHistory));
+
+      axios.post('/api/snapshots', { userId: effectiveKey, history: newHistory })
+        .catch(err => console.warn("[Snapshots API] Post notice:", err));
+    } catch (fetchErr) {
+      console.warn("[Snapshot] Error capturing other modes:", fetchErr);
+    }
 
     return true;
   };

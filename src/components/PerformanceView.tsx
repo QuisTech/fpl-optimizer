@@ -191,6 +191,12 @@ export const PerformanceView = ({ history, fetchLivePoints }: PerformanceViewPro
                     const actual = calculateActual(gwId, data);
                     const diff = actual - normalizedXP;
                     const hasStarted = actual > 0;
+                    
+                    // Filter out unpopulated 0.0 xP placeholders before kickoff
+                    if (normalizedXP === 0 && actual === 0 && (!data.players || data.players.length === 0 || data.players.every((p: any) => !p.score))) {
+                      return null;
+                    }
+
                     return {
                       key,
                       data,
