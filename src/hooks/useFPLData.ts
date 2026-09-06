@@ -188,7 +188,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
   const fetchLivePoints = async (gwId: number) => {
     try {
       const res = await axios.get(`/api/live/${gwId}`);
-      return res.data.elements;
+      return res.data;
     } catch (err) {
       console.error("Live points fetch error:", err);
       return null;

@@ -43,6 +43,29 @@ async function startServer() {
     }
   });
 
+  
+  app.get("/api/live/:eventId", async (req, res) => {
+    try {
+      const { eventId } = req.params;
+      const axios = (await import('axios')).default;
+      const [liveRes, fixturesRes] = await Promise.all([
+        axios.get(`https://fantasy.premierleague.com/api/event/${eventId}/live/`, {
+          headers: { "User-Agent": "Mozilla/5.0" }
+        }),
+        axios.get(`https://fantasy.premierleague.com/api/fixtures/?event=${eventId}`, {
+          headers: { "User-Agent": "Mozilla/5.0" }
+        }).catch(() => ({ data: [] }))
+      ]);
+      res.json({
+        elements: liveRes.data.elements,
+        fixtures: fixturesRes.data || []
+      });
+    } catch (error: any) {
+      console.error("Local Dev Live Error:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.use(vite.middlewares);
 
   app.listen(PORT, "0.0.0.0", () => {
