@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '../lib/utils';
 import { TrendingUp, Award, Clock, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Trophy, Filter, BarChart3, Sparkles } from 'lucide-react';
 
@@ -20,27 +20,23 @@ interface PlayerLiveScore {
   finished: boolean;
 }
 
-export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, activeFuel, onFuelChange }: PerformanceViewProps) => {
+// Project-specific Base Configuration
+const TARGET_FUEL: 'native' | 'fplform' | 'eye-test' = 'native';
+const APP_NAME = 'FPL Optimizer';
+const FUEL_LABEL = 'Native FPL';
+
+export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, activeFuel }: PerformanceViewProps) => {
   const [actualScores, setActualScores] = useState<Record<number, Record<number, PlayerLiveScore>>>({});
   const [loading, setLoading] = useState<Record<number, boolean>>({});
   const [selectedGwIndex, setSelectedGwIndex] = useState<number>(0);
   const [viewAll, setViewAll] = useState<boolean>(false);
 
-  // Sorting & Filtering state (default to activeFuel if provided)
+  // Sorting & Filtering state
   const [sortBy, setSortBy] = useState<SortField>('actual');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const [fuelFilter, setFuelFilter] = useState<string>(activeFuel || 'all');
-  const [scenarioFilter, setScenarioFilter] = useState<string>('all');
   const [riskFilter, setRiskFilter] = useState<string>('all');
 
-  // Synchronize fuel filter when top Fuel Source toggle changes
-  useEffect(() => {
-    if (activeFuel) {
-      setFuelFilter(activeFuel);
-    }
-  }, [activeFuel]);
-
-  const gws = Object.keys(history).map(Number).sort((a, b) => b - a);
+  const gws = Object.keys(history || {}).map(Number).sort((a, b) => b - a);
 
   // Automatically attempt official reconciliation for the latest gameweek on load
   useEffect(() => {
@@ -89,7 +85,7 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
       if (pData !== undefined) {
         // Official FPL Auto-sub Rule:
         // A player is ONLY substituted out if their fixture has FINISHED and they played 0 minutes!
-        // If their fixture has not finished yet (e.g. match scheduled for later today), they REMAIN in the starting XI!
+        // If their fixture has not finished yet, they REMAIN in the starting XI!
         if (pData.finished && pData.minutes === 0 && benchPlayers.length > 0) {
           const originalPlayer = players.find((p: any) => p.id === id);
           const sub = benchPlayers.find((b: any) => {
@@ -118,121 +114,132 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
   const getSnapshotsForGW = (gwData: Record<string, any>) => {
     if (!gwData || typeof gwData !== 'object') return [];
 
-    // Check if any composite full-matrix keys exist (e.g. 'fplform_quant_value')
+    const effectiveFuel = activeFuel || TARGET_FUEL;
     const keys = Object.keys(gwData);
-    const hasCompositeKeys = keys.some(k => k.includes('_'));
-    const legacyKeys = new Set(['safe', 'aggressive', 'value']);
 
-    // Strategy combination map to hold the most recent snapshot per combination
-    const combinationMap = new Map<string, any>();
+    // Target AI modes for this project: Safe, Aggressive, Value
+    const targetModes = [
+      { key: 'safe', label: 'SAFE', aliases: ['safe'] },
+      { key: 'aggressive', label: 'AGGRESSIVE', aliases: ['aggressive', 'risky'] },
+      { key: 'value', label: 'VALUE', aliases: ['value'] },
+    ];
 
-    keys.forEach(key => {
-      const item = gwData[key];
-      if (!item || typeof item !== 'object' || !item.players) return;
+    const resultSnapshots: any[] = [];
 
-      // Special handling for the user's real synced squad (stored per fuel e.g. user_synced_squad_native)
-      if (key.startsWith('user_synced_squad') || item.isUserSquad) {
-        const itemFuel = item.fuel && item.fuel !== 'user' 
-          ? item.fuel 
-          : key.includes('native') ? 'native' : key.includes('eye-test') ? 'eye-test' : 'fplform';
-        const userKey = `user_synced_squad_${itemFuel}`;
-        const fuelName = itemFuel === 'eye-test' ? 'Eye Test' : itemFuel === 'native' ? 'Native FPL' : 'FPLForm';
-        const formattedUserItem = {
-          ...item,
-          uniqueId: userKey,
-          key: userKey,
-          fuel: itemFuel,
-          scenario: 'user',
-          riskMode: 'user',
-          fuelLabel: `My Team (${fuelName})`,
-          scenarioLabel: item.scenarioLabel || 'Synced FPL Squad',
-          riskLabel: 'HUMAN',
-          isUserSquad: true
+    // 1. Resolve each AI mode for this project's fuel
+    for (const modeConfig of targetModes) {
+      let matchedItem: any = null;
+      let matchedKey = '';
+
+      // Priority A: Project composite keys (e.g. native_quant_safe or native_template_safe)
+      const candidateKeys = keys.filter(k => {
+        if (!k.startsWith(`${effectiveFuel}_`)) return false;
+        return modeConfig.aliases.some(alias => k.endsWith(`_${alias}`));
+      });
+
+      if (candidateKeys.length > 0) {
+        // If multiple exist (e.g. quant and template), prefer 'quant' (the primary optimizer engine), then newest timestamp
+        candidateKeys.sort((a, b) => {
+          const aIsQuant = a.includes('_quant_') ? 1 : 0;
+          const bIsQuant = b.includes('_quant_') ? 1 : 0;
+          if (aIsQuant !== bIsQuant) return bIsQuant - aIsQuant;
+          const timeA = gwData[a]?.timestamp || 0;
+          const timeB = gwData[b]?.timestamp || 0;
+          return timeB - timeA;
+        });
+        matchedKey = candidateKeys[0];
+        matchedItem = gwData[matchedKey];
+      }
+
+      // Priority B: Direct mode key (e.g. gwData['safe']), provided it matches this fuel or has no foreign fuel
+      if (!matchedItem) {
+        for (const alias of modeConfig.aliases) {
+          const directItem = gwData[alias];
+          if (directItem && typeof directItem === 'object' && directItem.players) {
+            if (!directItem.fuel || directItem.fuel === effectiveFuel) {
+              matchedItem = directItem;
+              matchedKey = alias;
+              break;
+            }
+          }
+        }
+      }
+
+      if (matchedItem && matchedItem.players) {
+        const scenario = matchedItem.scenario || 'quant';
+        resultSnapshots.push({
+          ...matchedItem,
+          uniqueId: `${effectiveFuel}_${modeConfig.key}`,
+          key: matchedKey,
+          fuel: effectiveFuel,
+          scenario,
+          riskMode: modeConfig.key,
+          fuelLabel: matchedItem.fuelLabel || FUEL_LABEL,
+          scenarioLabel: matchedItem.scenarioLabel || (scenario === 'quant' ? 'Quant Optimal' : 'Risky Template Shield'),
+          riskLabel: modeConfig.label,
+          isUserSquad: false
+        });
+      }
+    }
+
+    // 2. Resolve the Human Manager synced squad
+    let userSquadItem: any = null;
+    let userSquadKey = '';
+
+    // Priority A: Project-specific user squad evaluation (e.g. user_synced_squad_native)
+    const fuelUserKey = `user_synced_squad_${effectiveFuel}`;
+    if (gwData[fuelUserKey] && gwData[fuelUserKey].players) {
+      userSquadItem = gwData[fuelUserKey];
+      userSquadKey = fuelUserKey;
+    }
+
+    // Priority B: Direct user_synced_squad
+    if (!userSquadItem && gwData['user_synced_squad'] && gwData['user_synced_squad'].players) {
+      userSquadItem = gwData['user_synced_squad'];
+      userSquadKey = 'user_synced_squad';
+    }
+
+    // Priority C: Any key marked as isUserSquad or starting with user_synced_squad
+    if (!userSquadItem) {
+      const anyUserKey = keys.find(k => (k.startsWith('user_synced_squad') || gwData[k]?.isUserSquad) && gwData[k]?.players);
+      if (anyUserKey) {
+        userSquadItem = gwData[anyUserKey];
+        userSquadKey = anyUserKey;
+      }
+    }
+
+    if (userSquadItem && userSquadItem.players) {
+      // If user squad was evaluated with another fuel, scale expected points (xP) to match this project's fuel level
+      let adjustedXP = userSquadItem.xP || 0;
+      if (userSquadItem.fuel && userSquadItem.fuel !== effectiveFuel && resultSnapshots.length > 0) {
+        const fuelMultipliers: Record<string, number> = {
+          'fplform': 1.0,
+          'eye-test': 84 / 54,
+          'native': 116 / 54
         };
-        const existing = combinationMap.get(userKey);
-        if (!existing || (item.timestamp || 0) > (existing.timestamp || 0)) {
-          combinationMap.set(userKey, formattedUserItem);
+        const sourceMult = fuelMultipliers[userSquadItem.fuel] || 1.0;
+        const targetMult = fuelMultipliers[effectiveFuel] || 1.0;
+        if (sourceMult > 0) {
+          adjustedXP = Math.round((adjustedXP / sourceMult) * targetMult * 10) / 10;
         }
-        return;
       }
 
-      // If full matrix composite keys exist, ignore redundant legacy keys
-      if (hasCompositeKeys && legacyKeys.has(key)) return;
-
-      const fuel = item.fuel || 'fplform';
-      const scenario = item.scenario || 'quant';
-      const riskMode = item.riskMode || (legacyKeys.has(key) ? key : 'safe');
-      const comboKey = `${fuel}_${scenario}_${riskMode}`;
-
-      const formattedItem = {
-        ...item,
-        uniqueId: comboKey,
-        key: comboKey,
-        fuel,
-        scenario,
-        riskMode,
-        fuelLabel: item.fuelLabel || (fuel === 'eye-test' ? 'Eye Test' : fuel === 'native' ? 'Native FPL' : 'FPLForm'),
-        scenarioLabel: item.scenarioLabel || (scenario === 'quant' ? 'Quant Optimal' : 'Risky Template Shield'),
-        riskLabel: item.riskLabel || riskMode.toUpperCase(),
-        isUserSquad: false
-      };
-
-      // Keep the most recent snapshot for this combination
-      const existing = combinationMap.get(comboKey);
-      if (!existing || (item.timestamp || 0) > (existing.timestamp || 0)) {
-        combinationMap.set(comboKey, formattedItem);
-      }
-    });
-
-    // Ensure all 3 fuel evaluations (FPLForm, Native FPL, Eye Test) exist for the user squad if any user squad was captured
-    const allItems = Array.from(combinationMap.values());
-    const existingUser = allItems.find(i => i.isUserSquad);
-    
-    if (existingUser) {
-      const fplformAi = allItems.filter(i => !i.isUserSquad && i.fuel === 'fplform');
-      const nativeAi = allItems.filter(i => !i.isUserSquad && i.fuel === 'native');
-      const eyeTestAi = allItems.filter(i => !i.isUserSquad && i.fuel === 'eye-test');
-
-      const fplformAvg = fplformAi.length > 0 ? fplformAi.reduce((s, i) => s + (i.xP || 0), 0) / fplformAi.length : 54;
-      const nativeAvg = nativeAi.length > 0 ? nativeAi.reduce((s, i) => s + (i.xP || 0), 0) / nativeAi.length : 116;
-      const eyeTestAvg = eyeTestAi.length > 0 ? eyeTestAi.reduce((s, i) => s + (i.xP || 0), 0) / eyeTestAi.length : 84;
-
-      const baseFuel = existingUser.fuel || 'fplform';
-      const baseExpected = existingUser.xP || 53.2;
-
-      // Normalize base expected points to FPLForm scale
-      const baseFplformValue = baseFuel === 'native' 
-        ? baseExpected / (nativeAvg / (fplformAvg || 1))
-        : baseFuel === 'eye-test'
-        ? baseExpected / (eyeTestAvg / (fplformAvg || 1))
-        : baseExpected;
-
-      const fuelsToEnsure = [
-        { f: 'fplform', label: 'FPLForm', mult: 1.0 },
-        { f: 'native', label: 'Native FPL', mult: nativeAvg / (fplformAvg || 1) },
-        { f: 'eye-test', label: 'Eye Test', mult: eyeTestAvg / (fplformAvg || 1) }
-      ] as const;
-
-      fuelsToEnsure.forEach(({ f, label, mult }) => {
-        const uKey = `user_synced_squad_${f}`;
-        if (!combinationMap.has(uKey)) {
-          const scaledXp = Math.round(baseFplformValue * mult * 10) / 10;
-          combinationMap.set(uKey, {
-            ...existingUser,
-            uniqueId: uKey,
-            key: uKey,
-            fuel: f,
-            scenario: 'user',
-            riskMode: 'user',
-            fuelLabel: `My Team (${label})`,
-            xP: scaledXp,
-            isUserSquad: true
-          });
-        }
+      resultSnapshots.push({
+        ...userSquadItem,
+        uniqueId: `user_synced_squad_${effectiveFuel}`,
+        key: userSquadKey,
+        fuel: effectiveFuel,
+        scenario: 'user',
+        riskMode: 'user',
+        fuelLabel: `My Team (${FUEL_LABEL})`,
+        scenarioLabel: userSquadItem.scenarioLabel || 'Synced FPL Squad',
+        riskLabel: 'HUMAN',
+        xP: adjustedXP || userSquadItem.xP,
+        isUserSquad: true
       });
     }
 
-    return Array.from(combinationMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    return resultSnapshots;
   };
 
   const [expandedModes, setExpandedModes] = useState<Record<string, boolean>>({});
@@ -308,7 +315,7 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
           </div>
           <div>
             <h3 className="text-xs font-black text-white uppercase tracking-wider">
-              Performance Analysis
+              {APP_NAME} Performance
             </h3>
             <p className="text-[10px] text-slate-400 font-mono">
               {gws.length} Gameweek{gws.length > 1 ? 's' : ''} Tracked
@@ -317,7 +324,7 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
         </div>
 
         <div className="flex items-center justify-between sm:justify-end gap-2">
-          {/* User Requested Enveloped Chevron Bar */}
+          {/* Gameweek Enveloped Chevron Bar */}
           <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-lg border border-fpl-border/50">
             <button 
               onClick={() => {
@@ -405,17 +412,15 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
           };
         });
 
-        // Filter
+        // Filter by Risk/Squad Mode
         const filteredSnapshots = enrichedSnapshots.filter(data => {
-          if (fuelFilter !== 'all') {
-            if (fuelFilter === 'user') {
+          if (riskFilter !== 'all') {
+            if (riskFilter === 'user') {
               if (!data.isUserSquad) return false;
-            } else if (data.fuel !== fuelFilter) {
-              return false;
+            } else {
+              if (data.isUserSquad || data.riskMode !== riskFilter) return false;
             }
           }
-          if (scenarioFilter !== 'all' && data.scenario !== scenarioFilter && !data.isUserSquad) return false;
-          if (riskFilter !== 'all' && data.riskMode !== riskFilter && !data.isUserSquad) return false;
           return true;
         });
 
@@ -436,7 +441,6 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
             }
           } else if (sortBy === 'diff') {
             if (b.actual === 0 && a.actual === 0) {
-              // Pre-match fallback: rank by highest expected points
               res = b.normalizedXP - a.normalizedXP;
             } else {
               res = b.diff - a.diff;
@@ -458,10 +462,10 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-black text-white flex items-center gap-2">
                   <Award className="w-4 h-4 text-fpl-green" />
-                  GAMEWEEK {gwId} PERFORMANCE
+                  GAMEWEEK {gwId} LEADERBOARD
                 </h3>
                 <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded-full border border-slate-800">
-                  {sortedSnapshots.length} scenario{sortedSnapshots.length !== 1 ? 's' : ''}
+                  {rawSnapshots.length} squads tracked
                 </span>
               </div>
 
@@ -475,7 +479,7 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
               </button>
             </div>
 
-            {/* 🎛️ Interactive Sorting & Filtering Control Bar */}
+            {/* Interactive Sorting & Filtering Control Bar */}
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 mb-5 p-2.5 sm:p-3 rounded-xl bg-slate-900/90 border border-slate-800/90 shadow-inner">
               
               {/* Sort Modes */}
@@ -573,115 +577,74 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
                 </button>
               </div>
 
-              {/* Filter Selectors */}
+              {/* Project Squad Tier Filter */}
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
                   <Filter className="w-3 h-3 text-slate-400" /> Filter:
                 </span>
 
-                {/* Fuel Quick Pills */}
                 <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
                   <button
-                    onClick={() => setFuelFilter('all')}
+                    onClick={() => setRiskFilter('all')}
                     className={cn(
                       "px-2 py-0.5 rounded text-[8.5px] font-mono font-bold transition-all",
-                      fuelFilter === 'all'
-                        ? "bg-slate-700 text-white shadow-sm"
+                      riskFilter === 'all'
+                        ? "bg-slate-700 text-white shadow-sm font-black"
                         : "text-slate-400 hover:text-white"
                     )}
                   >
-                    ALL
+                    ALL ({rawSnapshots.length})
                   </button>
                   <button
-                    onClick={() => {
-                      setFuelFilter('fplform');
-                      onFuelChange?.('fplform');
-                    }}
+                    onClick={() => setRiskFilter('safe')}
                     className={cn(
                       "px-2 py-0.5 rounded text-[8.5px] font-mono font-bold transition-all",
-                      fuelFilter === 'fplform'
-                        ? "bg-fpl-purple text-white shadow-sm"
+                      riskFilter === 'safe'
+                        ? "bg-slate-200 text-slate-950 shadow-sm font-black"
                         : "text-slate-400 hover:text-white"
                     )}
                   >
-                    FPLFORM
+                    SAFE
                   </button>
                   <button
-                    onClick={() => {
-                      setFuelFilter('native');
-                      onFuelChange?.('native');
-                    }}
+                    onClick={() => setRiskFilter('aggressive')}
                     className={cn(
                       "px-2 py-0.5 rounded text-[8.5px] font-mono font-bold transition-all",
-                      fuelFilter === 'native'
-                        ? "bg-fpl-pink text-white shadow-sm"
+                      riskFilter === 'aggressive'
+                        ? "bg-orange-500 text-white shadow-sm font-black"
                         : "text-slate-400 hover:text-white"
                     )}
                   >
-                    NATIVE
+                    AGGRESSIVE
                   </button>
                   <button
-                    onClick={() => {
-                      setFuelFilter('eye-test');
-                      onFuelChange?.('eye-test');
-                    }}
+                    onClick={() => setRiskFilter('value')}
                     className={cn(
                       "px-2 py-0.5 rounded text-[8.5px] font-mono font-bold transition-all",
-                      fuelFilter === 'eye-test'
-                        ? "bg-amber-400 text-slate-950 shadow-sm font-black"
+                      riskFilter === 'value'
+                        ? "bg-cyan-500 text-slate-950 shadow-sm font-black"
                         : "text-slate-400 hover:text-white"
                     )}
                   >
-                    EYE-TEST
+                    VALUE
                   </button>
                   <button
-                    onClick={() => setFuelFilter('user')}
+                    onClick={() => setRiskFilter('user')}
                     className={cn(
                       "px-2 py-0.5 rounded text-[8.5px] font-mono font-bold transition-all flex items-center gap-0.5",
-                      fuelFilter === 'user'
+                      riskFilter === 'user'
                         ? "bg-emerald-500 text-slate-950 shadow-sm font-black"
                         : "text-emerald-400 hover:text-emerald-300"
                     )}
                   >
-                    👤 MY TEAM
+                    👤 MY SQUAD
                   </button>
                 </div>
 
-                {/* Scenario Filter */}
-
-                {/* Scenario Filter */}
-                <select
-                  value={scenarioFilter}
-                  onChange={(e) => setScenarioFilter(e.target.value)}
-                  aria-label="Filter by scenario"
-                  className="bg-slate-950 text-slate-200 border border-slate-800 text-[9px] font-mono font-bold rounded-lg px-2 py-1 focus:outline-none focus:border-fpl-green transition-colors cursor-pointer"
-                >
-                  <option value="all">All Scenarios</option>
-                  <option value="quant">Quant Optimal</option>
-                  <option value="template">Risky Template Shield</option>
-                </select>
-
-                {/* Risk Tier Filter */}
-                <select
-                  value={riskFilter}
-                  onChange={(e) => setRiskFilter(e.target.value)}
-                  aria-label="Filter by risk tier"
-                  className="bg-slate-950 text-slate-200 border border-slate-800 text-[9px] font-mono font-bold rounded-lg px-2 py-1 focus:outline-none focus:border-fpl-green transition-colors cursor-pointer"
-                >
-                  <option value="all">All Tiers</option>
-                  <option value="safe">Safe</option>
-                  <option value="aggressive">Aggressive</option>
-                  <option value="value">Value</option>
-                </select>
-
-                {/* Reset Filters button if any active */}
-                {(fuelFilter !== 'all' || scenarioFilter !== 'all' || riskFilter !== 'all') && (
+                {/* Reset filter button if not all */}
+                {riskFilter !== 'all' && (
                   <button
-                    onClick={() => {
-                      setFuelFilter('all');
-                      setScenarioFilter('all');
-                      setRiskFilter('all');
-                    }}
+                    onClick={() => setRiskFilter('all')}
                     className="text-[8px] font-mono uppercase text-rose-400 hover:text-rose-300 underline ml-1"
                   >
                     Reset
@@ -691,20 +654,16 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
 
             </div>
 
-            {/* Scenario Performance Cards Grid/List */}
+            {/* Squad Performance Cards */}
             <div className="flex flex-col gap-3.5">
               {sortedSnapshots.length === 0 ? (
                 <div className="text-center py-10 bg-slate-950/50 rounded-xl border border-slate-800/80">
-                  <p className="text-slate-400 font-mono text-xs">No scenarios match your active filters.</p>
+                  <p className="text-slate-400 font-mono text-xs">No squads match your active filter.</p>
                   <button
-                    onClick={() => {
-                      setFuelFilter('all');
-                      setScenarioFilter('all');
-                      setRiskFilter('all');
-                    }}
+                    onClick={() => setRiskFilter('all')}
                     className="mt-2 text-[9px] font-mono font-bold text-fpl-green underline uppercase tracking-wider"
                   >
-                    Clear Filters
+                    Clear Filter
                   </button>
                 </div>
               ) : (
@@ -757,13 +716,11 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
                             {rankIndex === 0 ? '🥇 #1' : rankIndex === 1 ? '🥈 #2' : rankIndex === 2 ? '🥉 #3' : `#${rankIndex + 1}`}
                           </span>
 
-                          {/* Fuel Source Badge */}
+                          {/* Engine Source Badge */}
                           <span className={cn(
                             "text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border",
                             data.isUserSquad ? "bg-emerald-500 text-slate-950 border-emerald-400 font-black shadow-sm" :
-                            data.fuel === 'eye-test' ? "bg-amber-500/10 text-amber-400 border-amber-500/30" :
-                            data.fuel === 'native' ? "bg-blue-500/10 text-blue-400 border-blue-500/30" :
-                            "bg-fpl-purple text-white border-fpl-purple/50 shadow-sm"
+                            "bg-blue-500/10 text-blue-400 border-blue-500/30"
                           )}>
                             {data.fuelLabel}
                           </span>
@@ -772,7 +729,6 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
                           <span className={cn(
                             "text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded border",
                             data.isUserSquad ? "bg-slate-900 text-emerald-300 border-emerald-500/40" :
-                            data.scenario === 'template' ? "bg-rose-500/10 text-rose-400 border-rose-500/30" :
                             "bg-fpl-green/10 text-fpl-green border-fpl-green/30"
                           )}>
                             {data.scenarioLabel}
