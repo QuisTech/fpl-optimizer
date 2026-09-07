@@ -6,8 +6,8 @@ interface PerformanceViewProps {
   history: any;
   fetchLivePoints: (gwId: number) => Promise<any>;
   reconcileUserSquad?: (gwId: number) => Promise<boolean>;
-  activeFuel?: 'fplform' | 'native' | 'eye-test';
-  onFuelChange?: (fuel: 'fplform' | 'native' | 'eye-test') => void;
+  activeFuel?: string;
+  onFuelChange?: (fuel: any) => void;
 }
 
 type SortField = 'actual' | 'diff' | 'xp' | 'time';
@@ -20,12 +20,7 @@ interface PlayerLiveScore {
   finished: boolean;
 }
 
-// Project-specific Base Configuration
-const TARGET_FUEL: 'native' | 'fplform' | 'eye-test' = 'native';
-const APP_NAME = 'FPL Optimizer';
-const FUEL_LABEL = 'Native FPL';
-
-export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, activeFuel }: PerformanceViewProps) => {
+export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }: PerformanceViewProps) => {
   const [actualScores, setActualScores] = useState<Record<number, Record<number, PlayerLiveScore>>>({});
   const [loading, setLoading] = useState<Record<number, boolean>>({});
   const [selectedGwIndex, setSelectedGwIndex] = useState<number>(0);
@@ -113,133 +108,65 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
 
   const getSnapshotsForGW = (gwData: Record<string, any>) => {
     if (!gwData || typeof gwData !== 'object') return [];
-
-    const effectiveFuel = activeFuel || TARGET_FUEL;
     const keys = Object.keys(gwData);
 
-    // Target AI modes for this project: Safe, Aggressive, Value
-    const targetModes = [
-      { key: 'safe', label: 'SAFE', aliases: ['safe'] },
-      { key: 'aggressive', label: 'AGGRESSIVE', aliases: ['aggressive', 'risky'] },
-      { key: 'value', label: 'VALUE', aliases: ['value'] },
-    ];
+    // 1. Resolve AI Modes: safe, aggressive/risky, value
+    const safeData = gwData['safe'] || gwData[keys.find(k => k.endsWith('_safe') && !k.startsWith('user_')) || ''];
+    const aggData = gwData['aggressive'] || gwData['risky'] || gwData[keys.find(k => (k.endsWith('_aggressive') || k.endsWith('_risky')) && !k.startsWith('user_')) || ''];
+    const valData = gwData['value'] || gwData[keys.find(k => k.endsWith('_value') && !k.startsWith('user_')) || ''];
 
-    const resultSnapshots: any[] = [];
+    // 2. Resolve User Synced Squad (Human Manager)
+    const userKey = keys.find(k => k === 'user_synced_squad' || k.startsWith('user_synced_squad') || gwData[k]?.isUserSquad);
+    const userData = userKey ? gwData[userKey] : null;
 
-    // 1. Resolve each AI mode for this project's fuel
-    for (const modeConfig of targetModes) {
-      let matchedItem: any = null;
-      let matchedKey = '';
+    const rawList: any[] = [];
 
-      // Priority A: Project composite keys (e.g. native_quant_safe or native_template_safe)
-      const candidateKeys = keys.filter(k => {
-        if (!k.startsWith(`${effectiveFuel}_`)) return false;
-        return modeConfig.aliases.some(alias => k.endsWith(`_${alias}`));
+    if (safeData && safeData.players) {
+      rawList.push({
+        ...safeData,
+        uniqueId: 'safe',
+        key: 'safe',
+        riskMode: 'safe',
+        riskLabel: 'SAFE',
+        isUserSquad: false
       });
-
-      if (candidateKeys.length > 0) {
-        // If multiple exist (e.g. quant and template), prefer 'quant' (the primary optimizer engine), then newest timestamp
-        candidateKeys.sort((a, b) => {
-          const aIsQuant = a.includes('_quant_') ? 1 : 0;
-          const bIsQuant = b.includes('_quant_') ? 1 : 0;
-          if (aIsQuant !== bIsQuant) return bIsQuant - aIsQuant;
-          const timeA = gwData[a]?.timestamp || 0;
-          const timeB = gwData[b]?.timestamp || 0;
-          return timeB - timeA;
-        });
-        matchedKey = candidateKeys[0];
-        matchedItem = gwData[matchedKey];
-      }
-
-      // Priority B: Direct mode key (e.g. gwData['safe']), provided it matches this fuel or has no foreign fuel
-      if (!matchedItem) {
-        for (const alias of modeConfig.aliases) {
-          const directItem = gwData[alias];
-          if (directItem && typeof directItem === 'object' && directItem.players) {
-            if (!directItem.fuel || directItem.fuel === effectiveFuel) {
-              matchedItem = directItem;
-              matchedKey = alias;
-              break;
-            }
-          }
-        }
-      }
-
-      if (matchedItem && matchedItem.players) {
-        const scenario = matchedItem.scenario || 'quant';
-        resultSnapshots.push({
-          ...matchedItem,
-          uniqueId: `${effectiveFuel}_${modeConfig.key}`,
-          key: matchedKey,
-          fuel: effectiveFuel,
-          scenario,
-          riskMode: modeConfig.key,
-          fuelLabel: matchedItem.fuelLabel || FUEL_LABEL,
-          scenarioLabel: matchedItem.scenarioLabel || (scenario === 'quant' ? 'Quant Optimal' : 'Risky Template Shield'),
-          riskLabel: modeConfig.label,
-          isUserSquad: false
-        });
-      }
     }
 
-    // 2. Resolve the Human Manager synced squad
-    let userSquadItem: any = null;
-    let userSquadKey = '';
-
-    // Priority A: Project-specific user squad evaluation (e.g. user_synced_squad_native)
-    const fuelUserKey = `user_synced_squad_${effectiveFuel}`;
-    if (gwData[fuelUserKey] && gwData[fuelUserKey].players) {
-      userSquadItem = gwData[fuelUserKey];
-      userSquadKey = fuelUserKey;
+    if (aggData && aggData.players) {
+      const isRisky = aggData.riskMode === 'risky';
+      rawList.push({
+        ...aggData,
+        uniqueId: 'aggressive',
+        key: 'aggressive',
+        riskMode: 'aggressive',
+        riskLabel: isRisky ? 'RISKY' : 'AGGRESSIVE',
+        isUserSquad: false
+      });
     }
 
-    // Priority B: Direct user_synced_squad
-    if (!userSquadItem && gwData['user_synced_squad'] && gwData['user_synced_squad'].players) {
-      userSquadItem = gwData['user_synced_squad'];
-      userSquadKey = 'user_synced_squad';
+    if (valData && valData.players) {
+      rawList.push({
+        ...valData,
+        uniqueId: 'value',
+        key: 'value',
+        riskMode: 'value',
+        riskLabel: 'VALUE',
+        isUserSquad: false
+      });
     }
 
-    // Priority C: Any key marked as isUserSquad or starting with user_synced_squad
-    if (!userSquadItem) {
-      const anyUserKey = keys.find(k => (k.startsWith('user_synced_squad') || gwData[k]?.isUserSquad) && gwData[k]?.players);
-      if (anyUserKey) {
-        userSquadItem = gwData[anyUserKey];
-        userSquadKey = anyUserKey;
-      }
-    }
-
-    if (userSquadItem && userSquadItem.players) {
-      // If user squad was evaluated with another fuel, scale expected points (xP) to match this project's fuel level
-      let adjustedXP = userSquadItem.xP || 0;
-      if (userSquadItem.fuel && userSquadItem.fuel !== effectiveFuel && resultSnapshots.length > 0) {
-        const fuelMultipliers: Record<string, number> = {
-          'fplform': 1.0,
-          'eye-test': 84 / 54,
-          'native': 116 / 54
-        };
-        const sourceMult = fuelMultipliers[userSquadItem.fuel] || 1.0;
-        const targetMult = fuelMultipliers[effectiveFuel] || 1.0;
-        if (sourceMult > 0) {
-          adjustedXP = Math.round((adjustedXP / sourceMult) * targetMult * 10) / 10;
-        }
-      }
-
-      resultSnapshots.push({
-        ...userSquadItem,
-        uniqueId: `user_synced_squad_${effectiveFuel}`,
-        key: userSquadKey,
-        fuel: effectiveFuel,
-        scenario: 'user',
+    if (userData && userData.players) {
+      rawList.push({
+        ...userData,
+        uniqueId: 'user_synced_squad',
+        key: 'user_synced_squad',
         riskMode: 'user',
-        fuelLabel: `My Team (${FUEL_LABEL})`,
-        scenarioLabel: userSquadItem.scenarioLabel || 'Synced FPL Squad',
         riskLabel: 'HUMAN',
-        xP: adjustedXP || userSquadItem.xP,
         isUserSquad: true
       });
     }
 
-    return resultSnapshots;
+    return rawList;
   };
 
   const [expandedModes, setExpandedModes] = useState<Record<string, boolean>>({});
@@ -252,11 +179,9 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
   const refreshActuals = async (gwId: number) => {
     setLoading(prev => ({ ...prev, [gwId]: true }));
     try {
-      // 1. Reconcile official post-deadline user squad if available
       if (reconcileUserSquad) {
         await reconcileUserSquad(gwId);
       }
-      // 2. Fetch live actual points for this gameweek
       const liveData = await fetchLivePoints(gwId);
       if (liveData) {
         const elements = Array.isArray(liveData) ? liveData : (liveData.elements || []);
@@ -315,7 +240,7 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
           </div>
           <div>
             <h3 className="text-xs font-black text-white uppercase tracking-wider">
-              {APP_NAME} Performance
+              Performance Analysis
             </h3>
             <p className="text-[10px] text-slate-400 font-mono">
               {gws.length} Gameweek{gws.length > 1 ? 's' : ''} Tracked
@@ -460,9 +385,9 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
             {/* Header with Title & Refresh */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-black text-white flex items-center gap-2">
-                  <Award className="w-4 h-4 text-fpl-green" />
-                  GAMEWEEK {gwId} LEADERBOARD
+                <Award className="w-4 h-4 text-fpl-green" />
+                <h3 className="text-sm font-black text-white">
+                  GAMEWEEK {gwId} PERFORMANCE
                 </h3>
                 <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded-full border border-slate-800">
                   {rawSnapshots.length} squads tracked
@@ -716,34 +641,22 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
                             {rankIndex === 0 ? '🥇 #1' : rankIndex === 1 ? '🥈 #2' : rankIndex === 2 ? '🥉 #3' : `#${rankIndex + 1}`}
                           </span>
 
-                          {/* Engine Source Badge */}
-                          <span className={cn(
-                            "text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border",
-                            data.isUserSquad ? "bg-emerald-500 text-slate-950 border-emerald-400 font-black shadow-sm" :
-                            "bg-blue-500/10 text-blue-400 border-blue-500/30"
-                          )}>
-                            {data.fuelLabel}
-                          </span>
-
-                          {/* Scenario Strategy Badge */}
-                          <span className={cn(
-                            "text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded border",
-                            data.isUserSquad ? "bg-slate-900 text-emerald-300 border-emerald-500/40" :
-                            "bg-fpl-green/10 text-fpl-green border-fpl-green/30"
-                          )}>
-                            {data.scenarioLabel}
-                          </span>
-
                           {/* Risk Tier Badge */}
                           <span className={cn(
-                            "text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded",
-                            data.isUserSquad ? "bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold" :
-                            data.riskMode === 'aggressive' ? "bg-orange-500/20 text-orange-400" : 
-                            data.riskMode === 'value' ? "bg-cyan-500/20 text-cyan-400" : 
-                            "bg-slate-800 text-slate-300"
+                            "text-[8.5px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded border",
+                            data.isUserSquad ? "bg-emerald-500 text-slate-950 border-emerald-400 font-black shadow-sm" :
+                            data.riskMode === 'aggressive' ? "bg-orange-500/20 text-orange-400 border-orange-500/30" : 
+                            data.riskMode === 'value' ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" : 
+                            "bg-fpl-green/20 text-fpl-green border-fpl-green/30"
                           )}>
                             {data.isUserSquad ? 'HUMAN MANAGER' : data.riskLabel}
                           </span>
+
+                          {data.isUserSquad && data.teamName && (
+                            <span className="text-[8.5px] font-bold text-emerald-400/90 font-mono">
+                              {data.teamName}
+                            </span>
+                          )}
                         </div>
                         
                         <button 
@@ -779,7 +692,7 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
                             </div>
                           ) : (
                             <span className="text-[8px] text-slate-600 font-mono uppercase tracking-tighter">
-                              {data.timestamp ? new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'No Time'}
+                              {data.timestamp ? new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Upcoming'}
                             </span>
                           )}
                         </div>
