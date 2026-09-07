@@ -290,11 +290,11 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
   const displayedGws = viewAll ? gws : [gws[selectedGwIndex] || gws[0]];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5 w-full">
       {/* View Controls & GW Navigation Header */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
         {/* GW Selection Carousel */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {!viewAll && (
             <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-1">
               <button
@@ -306,13 +306,13 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
                 <ChevronLeft className="w-4 h-4" />
               </button>
               
-              <div className="px-3 py-1 flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-fpl-purple" />
-                <span className="font-bold text-sm text-white font-mono">
+              <div className="px-2.5 py-1 flex items-center gap-1.5">
+                <BarChart3 className="w-3.5 h-3.5 text-fpl-purple" />
+                <span className="font-bold text-xs sm:text-sm text-white font-mono">
                   GW {gws[selectedGwIndex]}
                 </span>
                 {selectedGwIndex === 0 && (
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-bold px-1.5 py-0.5 rounded border border-emerald-500/30 uppercase tracking-wide">
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-400 font-bold px-1.5 py-0.5 rounded border border-emerald-500/30 uppercase tracking-wide">
                     Latest
                   </span>
                 )}
@@ -334,7 +334,7 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
             <button
               onClick={() => setViewAll(false)}
               className={cn(
-                "px-3 py-1.5 rounded-md transition-all",
+                "px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all text-[11px] sm:text-xs",
                 !viewAll ? "bg-fpl-purple text-white shadow-sm" : "text-slate-400 hover:text-white"
               )}
             >
@@ -343,7 +343,7 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
             <button
               onClick={() => setViewAll(true)}
               className={cn(
-                "px-3 py-1.5 rounded-md transition-all",
+                "px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md transition-all text-[11px] sm:text-xs",
                 viewAll ? "bg-fpl-purple text-white shadow-sm" : "text-slate-400 hover:text-white"
               )}
             >
@@ -355,27 +355,27 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
         {/* Sorting & Filter Controls */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Filter by Mode */}
-          <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-1">
-            <Filter className="w-3.5 h-3.5 text-slate-400 ml-1.5 mr-0.5" />
+          <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-1 overflow-x-auto max-w-full">
+            <Filter className="w-3.5 h-3.5 text-slate-400 ml-1 mr-0.5 shrink-0" />
             {(['all', 'safe', 'aggressive', 'value', 'user'] as const).map(mode => (
               <button
                 key={mode}
                 onClick={() => setFilterMode(mode)}
                 className={cn(
-                  "px-2 py-1 rounded text-[11px] font-bold uppercase transition-colors",
+                  "px-2 py-1 rounded text-[10px] sm:text-[11px] font-bold uppercase transition-colors whitespace-nowrap",
                   filterMode === mode
                     ? "bg-slate-800 text-white shadow-sm"
                     : "text-slate-500 hover:text-slate-300"
                 )}
               >
-                {mode === 'all' ? `ALL (4)` : mode === 'user' ? '👤 MY SQUAD' : mode}
+                {mode === 'all' ? `ALL (${rawSnapshotsCount(history, gws[selectedGwIndex] || gws[0])})` : mode === 'user' ? '👤 MY SQUAD' : mode}
               </button>
             ))}
           </div>
 
           {/* Sort Controls */}
           <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-1 text-xs">
-            <span className="text-[10px] text-slate-500 font-bold uppercase pl-1.5 pr-0.5">Sort:</span>
+            <span className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase pl-1.5 pr-0.5">Sort:</span>
             {(['actual', 'diff', 'xp'] as const).map(field => (
               <button
                 key={field}
@@ -388,13 +388,13 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
                   }
                 }}
                 className={cn(
-                  "px-2 py-1 rounded text-[11px] font-medium flex items-center gap-1 transition-colors",
+                  "px-2 py-1 rounded text-[10px] sm:text-[11px] font-medium flex items-center gap-1 transition-colors whitespace-nowrap",
                   sortBy === field
                     ? "bg-slate-800 text-white font-semibold"
                     : "text-slate-500 hover:text-slate-300"
                 )}
               >
-                {field === 'actual' ? 'Actual Pts' : field === 'diff' ? 'vs xP' : 'Expected'}
+                {field === 'actual' ? 'Actual' : field === 'diff' ? 'vs xP' : 'Expected'}
                 {sortBy === field && (
                   sortOrder === 'desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />
                 )}
@@ -444,19 +444,19 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
         const isGwReconciling = reconciling[gwId];
 
         return (
-          <div key={gwId} className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-5">
+          <div key={gwId} className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 sm:p-5 space-y-4 sm:space-y-5">
             {/* Gameweek Section Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800/80 gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-xl font-black text-white tracking-tight">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3.5 sm:pb-4 border-b border-slate-800/80 gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-lg sm:text-xl font-black text-white tracking-tight">
                     GAMEWEEK {gwId} PERFORMANCE
                   </h3>
-                  <span className="text-xs font-mono font-bold bg-fpl-purple/20 text-fpl-purple border border-fpl-purple/30 px-2 py-0.5 rounded-full">
+                  <span className="text-[11px] font-mono font-bold bg-fpl-purple/20 text-fpl-purple border border-fpl-purple/30 px-2 py-0.5 rounded-full whitespace-nowrap">
                     {snapshotsWithScores.length} squads tracked
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">
                   Pre-deadline strategic recommendations vs live actual outcomes (with official post-deadline reconciliation)
                 </p>
               </div>
@@ -464,15 +464,20 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
               <button
                 disabled={isGwLoading || isGwReconciling}
                 onClick={() => refreshActuals(gwId)}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-fpl-purple to-indigo-600 hover:from-fpl-purple/90 hover:to-indigo-500 text-white text-xs font-bold rounded-lg transition-all shadow-md active:scale-95 disabled:opacity-50 shrink-0"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-fpl-purple to-indigo-600 hover:from-fpl-purple/90 hover:to-indigo-500 text-white text-xs font-bold rounded-lg transition-all shadow-md active:scale-95 disabled:opacity-50 shrink-0 w-full sm:w-auto"
               >
-                <TrendingUp className={cn("w-3.5 h-3.5", (isGwLoading || isGwReconciling) && "animate-spin")} />
-                {isGwReconciling ? "RECONCILING SQUAD..." : isGwLoading ? "FETCHING LIVE SCORES..." : "REFRESH ACTUALS"}
+                <TrendingUp className={cn("w-3.5 h-3.5 shrink-0", (isGwLoading || isGwReconciling) && "animate-spin")} />
+                <span>{isGwReconciling ? "RECONCILING SQUAD..." : isGwLoading ? "FETCHING LIVE SCORES..." : "REFRESH ACTUALS"}</span>
               </button>
             </div>
 
-            {/* Performance Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {/* Performance Cards Grid - Adaptive 2-column or auto-fit layout guaranteeing >= 270px per card */}
+            <div 
+              className="grid gap-3.5 sm:gap-4"
+              style={{
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 270px), 1fr))'
+              }}
+            >
               {snapshotsWithScores.map((data, index) => {
                 const isExpanded = expandedModes[`${gwId}-${data.uniqueId}`];
                 const isTopPerformer = index === 0 && data.actual > 0;
@@ -482,12 +487,12 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
                   <div
                     key={data.uniqueId}
                     className={cn(
-                      "flex flex-col justify-between rounded-xl border p-4 transition-all relative overflow-hidden",
+                      "flex flex-col justify-between rounded-xl border p-3 sm:p-4 transition-all relative overflow-hidden",
                       isTopPerformer
-                        ? "bg-slate-950/80 border-amber-500/50 shadow-lg shadow-amber-500/5"
+                        ? "bg-slate-950/90 border-amber-500/50 shadow-lg shadow-amber-500/5"
                         : isUserSquad
-                        ? "bg-slate-950/70 border-indigo-500/40 shadow-md"
-                        : "bg-slate-950/50 border-slate-800/80 hover:border-slate-700"
+                        ? "bg-slate-950/80 border-indigo-500/40 shadow-md"
+                        : "bg-slate-950/60 border-slate-800/80 hover:border-slate-700"
                     )}
                   >
                     {/* Top Performer Badge */}
@@ -500,11 +505,11 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
 
                     {/* Card Header */}
                     <div>
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <div className="flex items-center gap-1.5">
+                      <div className="flex justify-between items-start mb-2 gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={cn(
-                              "text-xs font-black tracking-wide uppercase px-2 py-0.5 rounded",
+                              "text-[11px] font-black tracking-wide uppercase px-2 py-0.5 rounded whitespace-nowrap",
                               data.riskMode === 'safe'
                                 ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
                                 : data.riskMode === 'aggressive'
@@ -515,17 +520,17 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
                             )}>
                               {index === 0 ? '🥇 #1' : index === 1 ? '🥈 #2' : index === 2 ? '🥉 #3' : `#${index + 1}`}
                             </span>
-                            <span className="text-xs font-bold text-slate-200">
+                            <span className="text-xs font-bold text-slate-200 truncate">
                               {data.riskLabel}
                             </span>
                           </div>
 
                           {isUserSquad && (
-                            <div className="flex items-center gap-1 mt-1 text-[10px] text-indigo-400 font-mono">
-                              <span>👤 MY SYNCED SQUAD</span>
+                            <div className="flex items-center gap-1 mt-1 text-[10px] text-indigo-400 font-mono flex-wrap">
+                              <span className="whitespace-nowrap font-bold">👤 MY SYNCED SQUAD</span>
                               {data.isReconciled && (
-                                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.2 rounded text-[8px] font-semibold">
-                                  POST-DEADLINE RECONCILED
+                                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.2 rounded text-[8px] font-semibold whitespace-nowrap">
+                                  RECONCILED
                                 </span>
                               )}
                             </div>
@@ -535,27 +540,27 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
                         {/* View Squad Toggle */}
                         <button
                           onClick={() => toggleExpand(gwId, data.uniqueId)}
-                          className="text-[10px] font-bold text-slate-400 hover:text-white bg-slate-900 border border-slate-800 hover:border-slate-700 px-2 py-1 rounded transition-colors"
+                          className="shrink-0 text-[10px] font-bold text-slate-400 hover:text-white bg-slate-900 border border-slate-800 hover:border-slate-700 px-2 py-1 rounded transition-colors whitespace-nowrap"
                         >
                           {isExpanded ? "[ HIDE SQUAD ]" : "[ VIEW SQUAD ]"}
                         </button>
                       </div>
 
                       {/* Performance Metrics Box */}
-                      <div className="grid grid-cols-2 gap-2 bg-slate-900/60 border border-slate-800/60 rounded-lg p-2.5 my-3">
-                        <div>
-                          <p className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Expected</p>
-                          <p className="text-lg font-black text-slate-300 font-mono">
-                            {data.xP.toFixed(1)} <span className="text-xs text-slate-400 font-normal">xP</span>
+                      <div className="grid grid-cols-2 gap-2 bg-slate-900/70 border border-slate-800/70 rounded-lg p-2.5 my-2.5">
+                        <div className="min-w-0">
+                          <p className="text-[9px] uppercase font-bold text-slate-400 tracking-wider truncate">Expected</p>
+                          <p className="text-base sm:text-lg font-black text-slate-200 font-mono truncate">
+                            {data.xP.toFixed(1)} <span className="text-[11px] text-slate-400 font-normal">xP</span>
                           </p>
                         </div>
-                        <div className="border-l border-slate-800 pl-2">
-                          <p className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Actual</p>
+                        <div className="border-l border-slate-800 pl-2.5 min-w-0">
+                          <p className="text-[9px] uppercase font-bold text-slate-400 tracking-wider truncate">Actual</p>
                           <p className={cn(
-                            "text-lg font-black font-mono",
+                            "text-base sm:text-lg font-black font-mono truncate",
                             data.actual > data.xP ? "text-emerald-400" : data.actual < data.xP ? "text-rose-400" : "text-white"
                           )}>
-                            {data.actual}<span className="text-xs font-normal">pts</span>
+                            {data.actual}<span className="text-[11px] font-normal">pts</span>
                           </p>
                         </div>
                       </div>
@@ -564,7 +569,7 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
                       <div className="flex items-center justify-between px-1 mb-2">
                         <span className="text-[10px] text-slate-400 font-medium">vs xP</span>
                         <span className={cn(
-                          "text-xs font-bold font-mono px-2 py-0.5 rounded",
+                          "text-xs font-bold font-mono px-2 py-0.5 rounded whitespace-nowrap",
                           data.diff > 0 
                             ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
                             : data.diff < 0 
@@ -583,7 +588,7 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
                             <p className="text-[9px] font-bold tracking-widest text-slate-400 uppercase">
                               Starting XI (11)
                             </p>
-                            <span className="text-[7.5px] text-slate-500 font-mono">
+                            <span className="text-[8px] text-slate-500 font-mono">
                               Official Lineup
                             </span>
                           </div>
@@ -599,32 +604,32 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
                                 <div
                                   key={p.id}
                                   className={cn(
-                                    "flex justify-between items-center px-2 py-1.5 rounded border transition-colors",
+                                    "flex justify-between items-center px-2 py-1.5 rounded border transition-colors gap-2",
                                     isSubbed
                                       ? "bg-rose-950/20 border-rose-500/30 opacity-75"
-                                      : "bg-slate-900/50 border-slate-800/50"
+                                      : "bg-slate-900/60 border-slate-800/50"
                                   )}
                                 >
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className="text-[8px] text-slate-500 w-6 font-bold font-mono">{p.position}</span>
+                                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                    <span className="text-[8px] text-slate-500 w-6 shrink-0 font-bold font-mono">{p.position}</span>
                                     <span className={cn(
-                                      "text-[10px] font-medium truncate",
+                                      "text-[10px] sm:text-[11px] font-medium truncate",
                                       isCapt ? "text-fpl-green font-bold" : isVice ? "text-fpl-pink font-bold" : "text-slate-300",
                                       isSubbed && "line-through text-slate-400"
                                     )}>
                                       {p.web_name} {isCapt && '(C)'} {isVice && '(V)'}
                                     </span>
                                     {isSubbed && (
-                                      <span className="text-[7.5px] bg-rose-950/80 text-rose-400 px-1 py-0.5 rounded border border-rose-800/60 font-semibold uppercase tracking-tight">
-                                        Subbed Out (0 mins)
+                                      <span className="text-[7.5px] bg-rose-950/80 text-rose-400 px-1 py-0.2 rounded border border-rose-800/60 font-semibold uppercase tracking-tight whitespace-nowrap shrink-0">
+                                        Subbed Out
                                       </span>
                                     )}
                                   </div>
 
-                                  <div className="flex items-center gap-1.5 shrink-0">
+                                  <div className="shrink-0">
                                     {pScore !== undefined ? (
                                       <span className={cn(
-                                        "text-[10px] font-mono font-bold px-1.5 py-0.2 rounded",
+                                        "text-[10px] font-mono font-bold px-1.5 py-0.5 rounded whitespace-nowrap",
                                         isSubbed
                                           ? "text-slate-500 bg-slate-950 line-through"
                                           : pScore.points > 5
@@ -646,17 +651,17 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
 
                           {/* Bench Players Section */}
                           {data.benchPlayers && data.benchPlayers.length > 0 && (
-                            <div className="mt-4 pt-3 border-t border-dashed border-slate-800">
+                            <div className="mt-3.5 pt-2.5 border-t border-dashed border-slate-800">
                               <div className="flex items-center justify-between mb-2 px-0.5">
                                 <p className="text-[9px] font-bold tracking-widest text-slate-400 uppercase">
                                   Bench ({data.benchPlayers.length})
                                 </p>
-                                <span className="text-[7.5px] text-slate-500 font-mono">
+                                <span className="text-[8px] text-slate-500 font-mono">
                                   Sub Priority Order
                                 </span>
                               </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                              <div className="space-y-1">
                                 {data.benchPlayers
                                   .slice()
                                   .sort((a: any, b: any) => (a.position_in_squad || 0) - (b.position_in_squad || 0))
@@ -678,31 +683,31 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
                                       <div
                                         key={b.id}
                                         className={cn(
-                                          "flex justify-between items-center px-2 py-1.5 rounded border transition-colors",
+                                          "flex justify-between items-center px-2 py-1.5 rounded border transition-colors gap-2",
                                           isAutoSubbedIn
                                             ? "bg-emerald-950/20 border-emerald-500/30 text-slate-300"
                                             : "bg-slate-950/60 border-slate-900 text-slate-400 hover:border-slate-800"
                                         )}
                                       >
-                                        <div className="flex items-center gap-1.5 min-w-0">
-                                          <span className="text-[7px] font-mono font-bold bg-slate-900 text-slate-400 px-1 py-0.5 rounded border border-slate-800">
+                                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                          <span className="text-[7.5px] font-mono font-bold bg-slate-900 text-slate-400 px-1 py-0.5 rounded border border-slate-800 shrink-0">
                                             {subRole}
                                           </span>
-                                          <span className="text-[7.5px] text-slate-500 font-bold font-mono">{b.position}</span>
-                                          <span className="text-[9.5px] truncate font-medium text-slate-300">
+                                          <span className="text-[8px] text-slate-500 font-bold font-mono w-5 shrink-0">{b.position}</span>
+                                          <span className="text-[10px] truncate font-medium text-slate-300">
                                             {b.web_name}
                                           </span>
                                           {isAutoSubbedIn && (
-                                            <span className="text-[7px] bg-emerald-950/80 text-emerald-400 px-1 py-0.2 rounded border border-emerald-800/60 font-semibold uppercase">
+                                            <span className="text-[7px] bg-emerald-950/80 text-emerald-400 px-1 py-0.2 rounded border border-emerald-800/60 font-semibold uppercase whitespace-nowrap shrink-0">
                                               Subbed In
                                             </span>
                                           )}
                                         </div>
 
-                                        <div className="shrink-0 ml-1">
+                                        <div className="shrink-0">
                                           {bScore !== undefined ? (
                                             <span className={cn(
-                                              "text-[9px] font-mono font-bold px-1.5 py-0.2 rounded",
+                                              "text-[9px] font-mono font-bold px-1.5 py-0.5 rounded whitespace-nowrap",
                                               isAutoSubbedIn
                                                 ? "text-emerald-400 bg-emerald-500/20 border border-emerald-500/30"
                                                 : bScore.points > 2
@@ -734,3 +739,9 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
     </div>
   );
 };
+
+function rawSnapshotsCount(history: any, gwId: number): number {
+  if (!history || !history[gwId]) return 4;
+  const keys = Object.keys(history[gwId]);
+  return Math.min(4, Math.max(1, keys.length));
+}
