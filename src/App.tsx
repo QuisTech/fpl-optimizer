@@ -22,7 +22,7 @@ export default function App() {
   const [tab, setTab] = useState<'optimizer' | 'pitch' | 'picks' | 'transfers' | 'chips' | 'performance'>('optimizer');
   const [snapshotToast, setSnapshotToast] = useState<SnapshotToastData | null>(null);
   
-  const { 
+  const {
     data, 
     loading, 
     error,
@@ -39,7 +39,8 @@ export default function App() {
     excludedPlayerIds,
     toggleLock,
     toggleExclude,
-    clearConstraints
+    clearConstraints,
+    reconcileUserSquad
   } = useFPLData(riskMode);
 
   const handleSync = async () => {
@@ -141,7 +142,7 @@ export default function App() {
               ) : tab === 'transfers' ? (
                 <TransferView syncedData={syncedData} />
               ) : tab === 'performance' ? (
-                <PerformanceView history={history} fetchLivePoints={fetchLivePoints} />
+                <PerformanceView history={history} fetchLivePoints={fetchLivePoints} reconcileUserSquad={reconcileUserSquad} />
               ) : (
                 <ChipAdvisor syncedData={syncedData} />
               )}

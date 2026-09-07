@@ -35,7 +35,8 @@ async function startServer() {
     try {
       const { teamId } = req.params;
       const riskMode = (req.query.riskMode as string) || 'safe';
-      const result = await FPLService.syncTeam(teamId, riskMode);
+      const targetGw = req.query.gw ? parseInt(req.query.gw as string) : undefined;
+      const result = await FPLService.syncTeam(teamId, riskMode, targetGw);
       res.json(result);
     } catch (error: any) {
       console.error("Local Dev Sync Error:", error.message);

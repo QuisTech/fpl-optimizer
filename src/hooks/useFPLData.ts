@@ -96,6 +96,12 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
         score: p.score,
         position: p.position
       })),
+      benchPlayers: (currentModeData.bench || []).map(p => ({
+        id: p.id,
+        web_name: p.web_name,
+        score: p.score,
+        position: p.position
+      })),
       xP: currentModeData.expectedPoints,
       captainId: currentModeData.captain?.id,
       viceCaptainId: currentModeData.viceCaptain?.id,
@@ -109,6 +115,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     // 2. Snapshot the user's synced Starting XI if squad is synced
     if (syncedData && syncedData.squad && syncedData.squad.length >= 11) {
       const startingXI = syncedData.squad.filter(p => (p.position_in_squad ?? 0) <= 11);
+      const bench = syncedData.squad.filter(p => (p.position_in_squad ?? 0) >= 12);
       const captain = syncedData.squad.find(p => p.isCaptain || p.is_captain) || (startingXI.length > 0 ? startingXI[0] : null);
       const viceCaptain = syncedData.squad.find(p => p.isViceCaptain || p.is_vice_captain);
       const captainBonus = captain ? (captain.xP || 0) : 0;
@@ -121,6 +128,12 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
         teamName: syncedData.managerInfo?.teamName || 'Synced FPL Squad',
         isUserSquad: true,
         players: startingXI.map(p => ({
+          id: p.id,
+          web_name: p.web_name,
+          score: p.xP || p.score || 0,
+          position: p.position
+        })),
+        benchPlayers: bench.map(p => ({
           id: p.id,
           web_name: p.web_name,
           score: p.xP || p.score || 0,
@@ -159,6 +172,12 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
             riskMode: m,
             riskLabel: m.toUpperCase(),
             players: d.startingXI.map((player: any) => ({
+              id: player.id,
+              web_name: player.web_name,
+              score: player.score,
+              position: player.position
+            })),
+            benchPlayers: (d.bench || []).map((player: any) => ({
               id: player.id,
               web_name: player.web_name,
               score: player.score,
@@ -261,6 +280,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     refresh: fetchRecommendations,
     history,
     takeSnapshot,
+    reconcileUserSquad,
     fetchLivePoints,
     lockedPlayerIds: lockedPlayerIds || [],
     excludedPlayerIds: excludedPlayerIds || [],
