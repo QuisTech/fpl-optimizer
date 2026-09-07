@@ -267,6 +267,68 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     setExcludedPlayerIds([]);
   };
 
+    const reconcileUserSquad = async (gwId: number): Promise<boolean> => {
+    const effectiveTeamId = teamId || localStorage.getItem('fpl_team_id');
+    if (!effectiveTeamId) return false;
+    try {
+      const res = await axios.get(`/api/sync/${effectiveTeamId.toString().trim()}?gw=${gwId}&riskMode=${riskMode}`);
+      const squad = res.data?.squad;
+      const managerInfo = res.data?.managerInfo;
+      if (!squad || squad.length < 11) return false;
+
+      const startingXI = squad.filter((p: any) => (p.position_in_squad ?? 0) <= 11);
+      const bench = squad.filter((p: any) => (p.position_in_squad ?? 0) >= 12);
+      const captain = squad.find((p: any) => p.isCaptain || p.is_captain) || (startingXI.length > 0 ? startingXI[0] : null);
+      const viceCaptain = squad.find((p: any) => p.isViceCaptain || p.is_vice_captain);
+      const captainBonus = captain ? (captain.xP || captain.score || 0) : 0;
+      const startingTotalXp = startingXI.reduce((sum: number, p: any) => sum + (p.xP || p.score || 0), 0) + captainBonus;
+
+      const now = Date.now();
+      const currentHistory = { ...history };
+      const gwHistory = { ...(currentHistory[gwId] || {}) };
+
+      gwHistory['user_synced_squad'] = {
+        ...(gwHistory['user_synced_squad'] || {}),
+        key: 'user_synced_squad',
+        riskMode: 'user',
+        riskLabel: 'HUMAN',
+        teamName: managerInfo?.teamName || gwHistory['user_synced_squad']?.teamName || 'Synced FPL Squad',
+        isUserSquad: true,
+        isReconciled: true,
+        players: startingXI.map((p: any) => ({
+          id: p.id,
+          web_name: p.web_name,
+          score: p.xP || p.score || 0,
+          position: p.position
+        })),
+        benchPlayers: bench.map((p: any) => ({
+          id: p.id,
+          web_name: p.web_name,
+          score: p.xP || p.score || 0,
+          position: p.position
+        })),
+        xP: Math.round(startingTotalXp * 10) / 10,
+        captainId: captain?.id,
+        viceCaptainId: viceCaptain?.id,
+        timestamp: now
+      };
+
+      currentHistory[gwId] = gwHistory;
+      setHistory(currentHistory);
+      localStorage.setItem('fpl_strategist_history', JSON.stringify(currentHistory));
+      localStorage.setItem('fpl_optimizer_history', JSON.stringify(currentHistory));
+
+      const effectiveKey = effectiveTeamId.startsWith('team_') ? effectiveTeamId : `team_${effectiveTeamId}`;
+      axios.post('/api/snapshots', { userId: effectiveKey, history: currentHistory })
+        .catch(err => console.warn("[Snapshots API] Post notice:", err));
+
+      return true;
+    } catch (err) {
+      console.warn("[Reconcile] Error syncing official picks:", err);
+      return false;
+    }
+  };
+
   return {
     data,
     loading,
