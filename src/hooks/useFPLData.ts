@@ -214,17 +214,21 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     }
   };
 
-  const syncTeam = async () => {
-    if (!teamId) return;
+  const syncTeam = async (overrideTeamId?: string) => {
+    const targetTeamId = overrideTeamId || teamId;
+    if (!targetTeamId) return;
     setSyncing(true);
-    localStorage.setItem('fpl_team_id', teamId);
+    localStorage.setItem('fpl_team_id', targetTeamId);
+    if (overrideTeamId && overrideTeamId !== teamId) {
+      setTeamId(overrideTeamId);
+    }
     try {
-      const res = await axios.get(`/api/sync/${teamId}?riskMode=${riskMode}`);
+      const res = await axios.get(`/api/sync/${targetTeamId.trim()}?riskMode=${riskMode}`);
       setSyncedData(res.data);
       setError(null);
 
       // Fetch team snapshots from cloud backend
-      axios.get(`/api/snapshots?userId=team_${teamId.trim()}`)
+      axios.get(`/api/snapshots?userId=team_${targetTeamId.trim()}`)
         .then(snapRes => {
           if (snapRes.data?.history && typeof snapRes.data.history === 'object') {
             setHistory((prev: any) => ({ ...prev, ...snapRes.data.history }));
@@ -234,12 +238,31 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
 
       return true;
     } catch (err) {
-      setError("Failed to sync team. Check your Team ID.");
+      if (!syncedData) {
+        setError("Failed to sync team. Check your Team ID.");
+      }
       return false;
     } finally {
       setSyncing(false);
     }
   };
+
+  // 1. Auto-sync squad on initial mount if saved team ID exists
+  useEffect(() => {
+    const saved = localStorage.getItem('fpl_team_id');
+    if (saved && /^\d{4,9}$/.test(saved.trim())) {
+      syncTeam(saved.trim());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 2. Re-sync team when riskMode changes so squad xP aligns with current strategy
+  useEffect(() => {
+    if (teamId && syncedData) {
+      syncTeam();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [riskMode]);
 
   const formation = useMemo(() => {
     if (!data || !data.startingXI) return { def: [], mid: [], fwd: [], gkp: [] };

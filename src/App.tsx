@@ -43,10 +43,24 @@ export default function App() {
     reconcileUserSquad
   } = useFPLData(riskMode);
 
-  const handleSync = async () => {
-    const success = await syncTeam();
-    if (success) setTab('transfers');
+  const handleSync = async (idToSync?: string, switchTab = false) => {
+    const target = idToSync || (teamId ? teamId.trim() : undefined);
+    const success = await syncTeam(target);
+    if (success && switchTab) setTab('transfers');
   };
+
+  // Debounced auto-sync when typing or pasting a valid 4-9 digit Team ID
+  useEffect(() => {
+    const trimmed = (teamId || '').trim();
+    if (!trimmed || !/^\d{4,9}$/.test(trimmed)) return;
+    if (syncedData && syncedData.managerInfo?.id?.toString() === trimmed) return;
+
+    const timer = setTimeout(() => {
+      handleSync(trimmed, false);
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [teamId]);
 
   const handleSnapshot = () => {
     if (data) {
@@ -119,10 +133,21 @@ export default function App() {
                     placeholder="TEAM ID" 
                     value={teamId}
                     onChange={(e) => setTeamId(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && /^\d{4,9}$/.test((teamId || '').trim())) {
+                        handleSync((teamId || '').trim(), true);
+                      }
+                    }}
+                    onBlur={() => {
+                      const trimmed = (teamId || '').trim();
+                      if (trimmed && /^\d{4,9}$/.test(trimmed) && (!syncedData || syncedData.managerInfo?.id?.toString() !== trimmed)) {
+                        handleSync(trimmed, false);
+                      }
+                    }}
                     className="bg-slate-950 border border-fpl-border rounded-lg px-3 py-1 text-[10px] font-mono text-fpl-green w-24 focus:outline-none focus:border-fpl-green"
                   />
                   <button 
-                    onClick={handleSync}
+                    onClick={() => handleSync(teamId ? teamId.trim() : undefined, true)}
                     disabled={syncing}
                     className="bg-fpl-purple hover:bg-fpl-purple/80 disabled:opacity-50 text-white text-[10px] font-black px-3 py-1 rounded-lg transition-colors"
                   >
