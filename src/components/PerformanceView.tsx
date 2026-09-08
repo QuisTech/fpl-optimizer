@@ -6,6 +6,8 @@ interface PerformanceViewProps {
   history: any;
   fetchLivePoints: (gwId: number) => Promise<any>;
   reconcileUserSquad?: (gwId: number) => Promise<boolean>;
+  syncedData?: any;
+  riskMode?: string;
   activeFuel?: string;
   onFuelChange?: (fuel: any) => void;
 }
@@ -20,7 +22,7 @@ interface PlayerLiveScore {
   finished: boolean;
 }
 
-export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }: PerformanceViewProps) => {
+export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, syncedData, riskMode }: PerformanceViewProps) => {
   const [actualScores, setActualScores] = useState<Record<number, Record<number, PlayerLiveScore>>>({});
   const [loading, setLoading] = useState<Record<number, boolean>>({});
   const [reconciling, setReconciling] = useState<Record<number, boolean>>({});
@@ -114,10 +116,19 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
 
     // 2. Resolve User Synced Squad (Human Manager)
     const userKeys = keys.filter(k => k === 'user_synced_squad' || k.startsWith('user_synced_squad') || gwData[k]?.isUserSquad);
-    let userKey = userKeys.find(k => gwData[k]?.isReconciled) || 
+    let userKey = userKeys.find(k => k === 'user_synced_squad') ||
+                  userKeys.find(k => gwData[k]?.isReconciled) || 
                   userKeys.find(k => gwData[k]?.benchPlayers?.length > 0) || 
                   userKeys[0];
     let userData = userKey ? gwData[userKey] : null;
+
+    // Calculate active live squad projected xP from syncedData
+    const activeSyncedXI = (syncedData?.squad || []).filter((p: any) => (p.position_in_squad ?? 0) <= 11);
+    const activeCaptain = (syncedData?.squad || []).find((p: any) => p.isCaptain || p.is_captain) || activeSyncedXI[0];
+    const activeCapBonus = activeCaptain ? (activeCaptain.xP || activeCaptain.score || 0) : 0;
+    const activeLiveSquadXp = activeSyncedXI.length >= 11 
+      ? Math.round((activeSyncedXI.reduce((sum: number, p: any) => sum + (p.xP || p.score || 0), 0) + activeCapBonus) * 10) / 10
+      : null;
 
     // Donor bench from user squad or any squad with bench
     const donorBench = (userData?.benchPlayers && userData.benchPlayers.length > 0)
@@ -203,6 +214,11 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
       });
     }
 
+    const isLatestGw = gwId === (gws[0] || 0);
+    const resolvedUserXp = (isLatestGw && activeLiveSquadXp !== null) 
+      ? activeLiveSquadXp 
+      : (userData?.xP || activeLiveSquadXp || 51.7);
+
     if (userData && userData.players) {
       rawList.push({
         ...userData,
@@ -212,7 +228,30 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad }
         riskLabel: 'HUMAN',
         benchPlayers: resolveBench(userData),
         isUserSquad: true,
-        xP: userData.xP || 51.7
+        xP: resolvedUserXp
+      });
+    } else if (activeLiveSquadXp !== null && isLatestGw) {
+      const benchPicks = (syncedData.squad || []).filter((p: any) => (p.position_in_squad ?? 0) >= 12);
+      rawList.push({
+        uniqueId: 'user_synced_squad',
+        key: 'user_synced_squad',
+        riskMode: 'user',
+        riskLabel: 'HUMAN',
+        teamName: syncedData.managerInfo?.teamName || 'Synced FPL Squad',
+        isUserSquad: true,
+        players: activeSyncedXI.map((p: any) => ({
+          id: p.id,
+          web_name: p.web_name,
+          score: p.xP || p.score || 0,
+          position: p.position
+        })),
+        benchPlayers: benchPicks.map((p: any) => ({
+          id: p.id,
+          web_name: p.web_name,
+          score: p.xP || p.score || 0,
+          position: p.position
+        })),
+        xP: activeLiveSquadXp
       });
     }
 

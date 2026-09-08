@@ -271,9 +271,24 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     const effectiveTeamId = teamId || localStorage.getItem('fpl_team_id');
     if (!effectiveTeamId) return false;
     try {
-      const res = await axios.get(`/api/sync/${effectiveTeamId.toString().trim()}?gw=${gwId}&riskMode=${riskMode}`);
-      const squad = res.data?.squad;
-      const managerInfo = res.data?.managerInfo;
+      let squad: any[] | null = null;
+      let managerInfo: any = null;
+      try {
+        const res = await axios.get(`/api/sync/${effectiveTeamId.toString().trim()}?gw=${gwId}&riskMode=${riskMode}`);
+        if (res.data?.squad && res.data.squad.length >= 11) {
+          squad = res.data.squad;
+          managerInfo = res.data.managerInfo;
+        }
+      } catch (fetchErr) {
+        if (syncedData?.squad && syncedData.squad.length >= 11) {
+          squad = syncedData.squad;
+          managerInfo = syncedData.managerInfo;
+        }
+      }
+      if (!squad && syncedData?.squad && syncedData.squad.length >= 11) {
+        squad = syncedData.squad;
+        managerInfo = syncedData.managerInfo;
+      }
       if (!squad || squad.length < 11) return false;
 
       const startingXI = squad.filter((p: any) => (p.position_in_squad ?? 0) <= 11);
@@ -287,7 +302,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
       const currentHistory = { ...history };
       const gwHistory = { ...(currentHistory[gwId] || {}) };
 
-      gwHistory['user_synced_squad'] = {
+      const reconciledItem = {
         ...(gwHistory['user_synced_squad'] || {}),
         key: 'user_synced_squad',
         riskMode: 'user',
@@ -312,6 +327,10 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
         viceCaptainId: viceCaptain?.id,
         timestamp: now
       };
+      gwHistory['user_synced_squad'] = reconciledItem;
+      ['user_synced_squad_native', 'user_synced_squad_fplform', 'user_synced_squad_eye-test'].forEach(k => {
+        if (gwHistory[k]) gwHistory[k] = { ...gwHistory[k], ...reconciledItem, key: k };
+      });
 
       currentHistory[gwId] = gwHistory;
       setHistory(currentHistory);

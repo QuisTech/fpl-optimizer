@@ -142,7 +142,7 @@ export default function App() {
               ) : tab === 'transfers' ? (
                 <TransferView syncedData={syncedData} />
               ) : tab === 'performance' ? (
-                <PerformanceView history={history} fetchLivePoints={fetchLivePoints} reconcileUserSquad={reconcileUserSquad} />
+                <PerformanceView history={history} fetchLivePoints={fetchLivePoints} reconcileUserSquad={reconcileUserSquad} syncedData={syncedData} riskMode={riskMode} />
               ) : (
                 <ChipAdvisor syncedData={syncedData} />
               )}
