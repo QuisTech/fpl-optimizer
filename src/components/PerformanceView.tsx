@@ -125,9 +125,9 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
     // Calculate active live squad projected xP from syncedData
     const activeSyncedXI = (syncedData?.squad || []).filter((p: any) => (p.position_in_squad ?? 0) <= 11);
     const activeCaptain = (syncedData?.squad || []).find((p: any) => p.isCaptain || p.is_captain) || activeSyncedXI[0];
-    const activeCapBonus = activeCaptain ? (activeCaptain.xP || activeCaptain.score || 0) : 0;
+    const activeCapBonus = activeCaptain ? (activeCaptain.xP || 0) : 0;
     const activeLiveSquadXp = activeSyncedXI.length >= 11 
-      ? Math.round((activeSyncedXI.reduce((sum: number, p: any) => sum + (p.xP || p.score || 0), 0) + activeCapBonus) * 10) / 10
+      ? Math.round((activeSyncedXI.reduce((sum: number, p: any) => sum + (p.xP || 0), 0) + activeCapBonus) * 10) / 10
       : null;
 
     // Donor bench from user squad or any squad with bench
@@ -214,10 +214,10 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
       });
     }
 
-    const isLatestGw = gwId !== undefined ? gwId === (gws[0] || 0) : true;
+    const isLatestGw = gwId !== undefined ? Number(gwId) === Number(gws[0] || 0) : true;
     const resolvedUserXp = (isLatestGw && activeLiveSquadXp !== null) 
       ? activeLiveSquadXp 
-      : (userData?.xP || activeLiveSquadXp || 51.7);
+      : (userData?.xP ? Math.round(userData.xP * 10) / 10 : (activeLiveSquadXp || 51.7));
 
     if (userData && userData.players) {
       rawList.push({

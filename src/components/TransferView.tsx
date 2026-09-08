@@ -58,9 +58,9 @@ export const TransferView = ({ syncedData, tier = 'ai-agent', setTab, userId }: 
   const captain = squad.find(p => p.isCaptain || p.is_captain) || (startingXI.length > 0 ? startingXI[0] : null);
   const captainBonus = captain ? (captain.xP || 0) : 0;
   const startingBaseXp = startingXI.reduce((sum, p) => sum + (p.xP || 0), 0);
-  const startingTotalXp = startingBaseXp + captainBonus;
-  const benchTotalXp = bench.reduce((sum, p) => sum + (p.xP || 0), 0);
-  const fullSquadXp = startingTotalXp + benchTotalXp;
+  const startingTotalXp = Math.round((startingBaseXp + captainBonus) * 10) / 10;
+  const benchTotalXp = Math.round(bench.reduce((sum, p) => sum + (p.xP || 0), 0) * 10) / 10;
+  const fullSquadXp = Math.round((startingTotalXp + benchTotalXp) * 10) / 10;
 
   // Position ordering for beautiful sorting
   const posOrder: Record<string, number> = { 'GKP': 1, 'DEF': 2, 'MID': 3, 'FWD': 4 };

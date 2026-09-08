@@ -32,12 +32,12 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
   const effectiveKey = teamId ? `team_${teamId.trim()}` : userId;
 
   const [history, setHistory] = useState<any>(() => {
-    const saved = localStorage.getItem('fpl_strategist_history') || localStorage.getItem('fpl_optimizer_history');
+    const saved = localStorage.getItem('fpl_optimizer_history') || localStorage.getItem('fpl_strategist_history') || localStorage.getItem('fpl_optimizer_history');
     return saved ? JSON.parse(saved) : {};
   });
 
   useEffect(() => {
-    localStorage.setItem('fpl_strategist_history', JSON.stringify(history));
+    localStorage.setItem('fpl_optimizer_history', JSON.stringify(history));
   }, [history]);
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
         if (res.data?.history && typeof res.data.history === 'object' && Object.keys(res.data.history).length > 0) {
           setHistory((prev: any) => {
             const merged = { ...res.data.history, ...prev };
-            localStorage.setItem('fpl_strategist_history', JSON.stringify(merged));
+            localStorage.setItem('fpl_optimizer_history', JSON.stringify(merged));
             return merged;
           });
         }
@@ -119,7 +119,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
       const captain = syncedData.squad.find(p => p.isCaptain || p.is_captain) || (startingXI.length > 0 ? startingXI[0] : null);
       const viceCaptain = syncedData.squad.find(p => p.isViceCaptain || p.is_vice_captain);
       const captainBonus = captain ? (captain.xP || 0) : 0;
-      const startingTotalXp = startingXI.reduce((sum, p) => sum + (p.xP || 0), 0) + captainBonus;
+      const startingTotalXp = Math.round((startingXI.reduce((sum, p) => sum + (p.xP || 0), 0) + captainBonus) * 10) / 10;
 
       gwHistory['user_synced_squad'] = {
         key: 'user_synced_squad',
@@ -149,7 +149,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
     // Immediately commit the active mode + user squad so UI updates instantly
     newHistory[gwId] = gwHistory;
     setHistory(newHistory);
-    localStorage.setItem('fpl_strategist_history', JSON.stringify(newHistory));
+    localStorage.setItem('fpl_optimizer_history', JSON.stringify(newHistory));
 
     // 3. Concurrently fetch and snapshot the other AI modes so all 3 modes (safe, aggressive, value) are captured!
     const otherModes = (['safe', 'aggressive', 'value'] as const).filter(m => m !== mode);
@@ -193,7 +193,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
 
       newHistory[gwId] = { ...gwHistory };
       setHistory({ ...newHistory });
-      localStorage.setItem('fpl_strategist_history', JSON.stringify(newHistory));
+      localStorage.setItem('fpl_optimizer_history', JSON.stringify(newHistory));
 
       axios.post('/api/snapshots', { userId: effectiveKey, history: newHistory })
         .catch(err => console.warn("[Snapshots API] Post notice:", err));
@@ -318,8 +318,8 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
       const bench = squad.filter((p: any) => (p.position_in_squad ?? 0) >= 12);
       const captain = squad.find((p: any) => p.isCaptain || p.is_captain) || (startingXI.length > 0 ? startingXI[0] : null);
       const viceCaptain = squad.find((p: any) => p.isViceCaptain || p.is_vice_captain);
-      const captainBonus = captain ? (captain.xP || captain.score || 0) : 0;
-      const startingTotalXp = startingXI.reduce((sum: number, p: any) => sum + (p.xP || p.score || 0), 0) + captainBonus;
+      const captainBonus = captain ? (captain.xP || 0) : 0;
+      const startingTotalXp = Math.round((startingXI.reduce((sum: number, p: any) => sum + (p.xP || 0), 0) + captainBonus) * 10) / 10;
 
       const now = Date.now();
       const currentHistory = { ...history };
@@ -357,7 +357,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
 
       currentHistory[gwId] = gwHistory;
       setHistory(currentHistory);
-      localStorage.setItem('fpl_strategist_history', JSON.stringify(currentHistory));
+      localStorage.setItem('fpl_optimizer_history', JSON.stringify(currentHistory));
       localStorage.setItem('fpl_optimizer_history', JSON.stringify(currentHistory));
 
       const effectiveKey = effectiveTeamId.startsWith('team_') ? effectiveTeamId : `team_${effectiveTeamId}`;

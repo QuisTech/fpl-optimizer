@@ -505,10 +505,11 @@ export class FPLService {
     const myPicks = teamRes.data.picks.map((p: any) => {
       const player = baseData.players.find((pl: any) => pl.id === p.element);
       if (!player) return null;
-      const baseMapped = this.mapToScoredPlayer(player, baseData.teams, baseData.fixtures, baseData.nextEventId, riskMode);
+      const baseMapped = this.mapToScoredPlayer(player, baseData.teams, baseData.fixtures, baseData.nextEventId, riskMode, oracle);
+      const playerXp = oracle ? oracle.getXP(player.id, baseData.nextEventId) : (parseFloat(String(player.ep_next || "0")) || 0);
       return {
         ...baseMapped,
-        xP: Math.round(baseMapped.score * 10) / 10,
+        xP: Math.round(playerXp * 10) / 10,
         eo: oracle.getTop1kEO?.(player.id) ?? 0,
         ownership: oracle.getTop1kOwnership?.(player.id) ?? parseFloat(player.selected_by_percent || "0") ?? 0,
         isCaptain: p.is_captain,
