@@ -192,65 +192,41 @@ export class FPLService {
     if (baseXP === 0 && player.ep_next) {
       baseXP = parseFloat(String(player.ep_next)) || 0;
     }
+    if (baseXP === 0) baseXP = 3.0;
 
     let score = baseXP;
 
-    const form = parseFloat(player.form) || 0;
-    score += form * 0.5;
-    
-    const xG = parseFloat(player.expected_goals) || 0;
-    const xA = parseFloat(player.expected_assists) || 0;
-    score += (xG * 2) + (xA * 1.5);
-
-    if (score === 0) {
-      const historicalPpm = (player.total_points || 0) / (player.now_cost / 10);
-      score = historicalPpm > 0 ? historicalPpm : 0.5;
+    // Immediate match FDR adjustment (±8% per difficulty tier from neutral 3)
+    const immediateFixture = (fixtures || []).find(f => f.event === nextEventId && (f.team_h === player.team || f.team_a === player.team));
+    if (immediateFixture) {
+      const fdr = immediateFixture.team_h === player.team ? immediateFixture.team_h_difficulty : immediateFixture.team_a_difficulty;
+      score *= (1 + (3 - fdr) * 0.08);
     }
 
-    const upcoming = fixtures.filter(f => f.event >= nextEventId && f.event < nextEventId + 3)
-      .filter(f => f.team_h === player.team || f.team_a === player.team);
-
-    let difficultyMultiplier = 1.0;
-    upcoming.forEach(f => {
-      const fdr = f.team_h === player.team ? f.team_h_difficulty : f.team_a_difficulty;
-      difficultyMultiplier *= (1 + (3 - fdr) * 0.1);
-    });
-    score *= difficultyMultiplier;
+    const costInMillions = (player.now_cost || 50) / 10;
+    const eo = oracle?.getTop1kEO?.(player.id) ?? 0;
+    const globalOwnership = parseFloat(player.selected_by_percent || "0");
+    const reliableOwnership = eo > 0 ? eo : globalOwnership;
 
     if (riskMode === 'safe') {
-      // Premium player protection (captaincy value)
-      const costInMillions = player.now_cost / 10;
+      // Premium protection & template protection
       if (costInMillions >= 10.0) score *= 1.15;
       else if (costInMillions >= 8.0) score *= 1.08;
-
-      // Smart Template Protection: Use Top 1k EO if available (post-GW1), else fallback to Global Ownership (pre-season)
-      const eo = oracle?.getTop1kEO?.(player.id) ?? 0;
-      const globalOwnership = parseFloat(player.selected_by_percent || "0");
-      const reliableOwnership = eo > 0 ? eo : globalOwnership;
-      
-      // Heavy template protection (boost high ownership players)
-      score *= (1 + 0.01 * reliableOwnership);
+      score *= (1 + 0.15 * (reliableOwnership / 100));
     } 
     else if (riskMode === 'aggressive') {
-      // Premium player protection
-      const costInMillions = player.now_cost / 10;
+      // Premium protection & differential ceiling weighting
       if (costInMillions >= 10.0) score *= 1.15;
       else if (costInMillions >= 8.0) score *= 1.08;
-
-      // Smart Differential Boost: Use Top 1k EO if available, else fallback to Global Ownership
-      const eo = oracle?.getTop1kEO?.(player.id) ?? 0;
-      const globalOwnership = parseFloat(player.selected_by_percent || "0");
-      const reliableOwnership = eo > 0 ? eo : globalOwnership;
-
-      // Differential Boost (+25%) for < 5% ownership
-      if (reliableOwnership < 5) {
-        score *= 1.25;
-      }
-    }
+      score *= (1 + 0.25 * (1 - reliableOwnership / 100));
+      if (reliableOwnership < 5) score *= 1.20;
+    } 
     else if (riskMode === 'value') {
-      // Value Mode: Pure points/value optimization. No biases.
-      // We just add a deterministic microscopic tiebreaker for the LP solver
-      score += (player.id % 10000) * 1e-4;
+      // Cost efficiency scaling normalized to squad average (£6.7m)
+      if (costInMillions > 0) {
+        score = (score / costInMillions) * 6.7;
+      }
+      score += (player.id % 10000) * 1e-4; // Deterministic tiebreaker for LP solver
     }
 
     return score;
@@ -506,10 +482,9 @@ export class FPLService {
       const player = baseData.players.find((pl: any) => pl.id === p.element);
       if (!player) return null;
       const baseMapped = this.mapToScoredPlayer(player, baseData.teams, baseData.fixtures, baseData.nextEventId, riskMode, oracle);
-      const playerXp = oracle ? oracle.getXP(player.id, baseData.nextEventId) : (parseFloat(String(player.ep_next || "0")) || 0);
       return {
         ...baseMapped,
-        xP: Math.round(playerXp * 10) / 10,
+        xP: Math.round(baseMapped.score * 10) / 10,
         eo: oracle.getTop1kEO?.(player.id) ?? 0,
         ownership: oracle.getTop1kOwnership?.(player.id) ?? parseFloat(player.selected_by_percent || "0") ?? 0,
         isCaptain: p.is_captain,
