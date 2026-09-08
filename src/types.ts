@@ -76,20 +76,113 @@ export interface ScoredPlayer extends FPLPlayer {
   horizonXP?: number;
 }
 
+export interface OmissionAnalysis {
+  omittedPlayer: {
+    id: number;
+    name: string;
+    team: string;
+    position: string;
+    cost: number;
+    eo: number;
+    xP: number;
+  };
+  replacementPlayers: Array<{
+    id: number;
+    name: string;
+    team: string;
+    position: string;
+    cost: number;
+    xP: number;
+  }>;
+  netXpGain: number;
+  explanation: string;
+}
+
+export interface ScenarioComparison {
+  quant: {
+    expectedPoints: number;
+    averageXiEo: number;
+    captain: string;
+    topPicksSummary: string;
+  };
+  template: {
+    expectedPoints: number;
+    averageXiEo: number;
+    captain: string;
+    topPicksSummary: string;
+  };
+  delta: {
+    xpDiff: number;
+    eoDiff: number;
+    swaps: Array<{
+      outPlayer: string;
+      inPlayer: string;
+      position: string;
+      xpDiff: number;
+      eoDiff: number;
+    }>;
+  };
+}
+
 export interface RecommendationResponse {
   squad: ScoredPlayer[];
   startingXI: ScoredPlayer[];
   bench: ScoredPlayer[];
-  captain: ScoredPlayer;
-  viceCaptain: ScoredPlayer;
+  captain: ScoredPlayer | null;
+  viceCaptain: ScoredPlayer | null;
+  expectedPoints: number;
+  totalCost: number;
+  isHeuristicFallback?: boolean;
+  activeScenario?: 'quant' | 'template';
+  lockedPlayerIds?: number[];
+  excludedPlayerIds?: number[];
+  engineDiagnostics?: {
+    budgetUsed: number;
+    budgetLimit: number;
+    riskMode: string;
+    solverStatus: 'optimal' | 'heuristic_fallback';
+    activeConstraints: {
+      minEoTotal?: number;
+      minElitePlayers?: number;
+      lockedCount?: number;
+      excludedCount?: number;
+    };
+    metrics?: {
+      horizonTotalXp?: number;
+      averageXiEo?: number;
+      swapAnalysis?: {
+        swapCount: number;
+        differentialQuality: string;
+        withinThresholdPct: number;
+        divergenceTier: string;
+        avgSwapCostPerGw: number;
+        totalXpSacrificed8GW: number;
+        avgEoReduction: number;
+      };
+      scenarioComparison?: ScenarioComparison;
+      omissionAnalysis?: OmissionAnalysis[];
+    };
+  };
   topPicks: {
     gkp: ScoredPlayer[];
     def: ScoredPlayer[];
     mid: ScoredPlayer[];
     fwd: ScoredPlayer[];
   };
-  totalCost: number;
-  expectedPoints: number;
+  topManagerInsight?: {
+    noChipLeaderCount: number;
+    sampleLeaders: Array<{
+      rank: number;
+      entry: number;
+      manager_name: string;
+      team_name: string;
+      total_points: number;
+    }>;
+    marketDisagreementRating: number;
+    eliteConsensusPicks: string[];
+  };
+  nextEventId: number;
+  lastUpdated: number;
 }
 
 export interface TransferRecommendation {
@@ -97,6 +190,7 @@ export interface TransferRecommendation {
   in: ScoredPlayer;
   localTransferSignal: number;
   xPDelta: number;
+  strategicScore?: number;
   horizon8GwXpIn?: number;
   horizon8GwXpOut?: number;
   horizon8GwDelta?: number;
@@ -109,7 +203,6 @@ export interface ChipAdvice {
   recommendation: 'STRONG BUY' | 'HOLD' | 'AVOID';
   reason: string;
 }
-
 
 export interface EntryHistory {
   points: number;
@@ -141,4 +234,6 @@ export interface TeamSyncResponse {
   totalCost?: number;
   entryHistory?: EntryHistory | null;
   managerInfo?: ManagerInfo | null;
+  gameweek?: number;
 }
+
