@@ -105,7 +105,7 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
     return total;
   };
 
-  const getSnapshotsForGW = (gwData: Record<string, any>) => {
+  const getSnapshotsForGW = (gwData: Record<string, any>, gwId?: number) => {
     if (!gwData || typeof gwData !== 'object') return [];
     const keys = Object.keys(gwData);
 
@@ -214,7 +214,7 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
       });
     }
 
-    const isLatestGw = gwId === (gws[0] || 0);
+    const isLatestGw = gwId !== undefined ? gwId === (gws[0] || 0) : true;
     const resolvedUserXp = (isLatestGw && activeLiveSquadXp !== null) 
       ? activeLiveSquadXp 
       : (userData?.xP || activeLiveSquadXp || 51.7);
@@ -446,7 +446,7 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
       {/* Gameweek Sections */}
       {displayedGws.map((gwId) => {
         const gwData = history[gwId];
-        const rawSnapshots = getSnapshotsForGW(gwData);
+        const rawSnapshots = getSnapshotsForGW(gwData, gwId);
 
         // Apply Mode Filter
         const filteredSnapshots = rawSnapshots.filter(s => {
