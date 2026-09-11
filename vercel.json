@@ -15,5 +15,6 @@
       "maxDuration": 30,
       "includeFiles": "data/**"
     }
-  }
+  },
+  "ignoreCommand": "git log -1 --pretty=format:\"%s\" | grep -q \"\\[skip ci\\]\""
 }
