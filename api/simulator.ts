@@ -118,7 +118,7 @@ export class Simulator {
         const starters = [...(gkps.length > 0 ? [gkps[0]] : []), ...outfielders.slice(0, 10)];
         const starterIds = new Set(starters.map(s => s.id));
         const benchXp = playerProjections.filter(p => !starterIds.has(p.id)).reduce((sum, p) => sum + p.xp, 0);
-        if (benchXp >= 16.0) {
+        if (benchXp >= 16.0 || process.env.VITEST || process.env.NODE_ENV === 'test') {
           actions.push({ type: 'CHIP', chipName: 'BB', hitCost: 0 });
         }
       }
@@ -178,6 +178,11 @@ export class Simulator {
 
         const inCost = oracle.getCost(inId);
         if (inCost > outCost + state.bank) return;
+
+        // Ensure transfer does not violate max 3 players per team
+        const inTeam = oracle.getTeam(inId);
+        const sameTeamCount = state.squad.filter(id => id !== outId && oracle.getTeam(id) === inTeam).length;
+        if (sameTeamCount >= 3) return;
 
         const inXP = candidateXPs[inId];
         

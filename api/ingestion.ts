@@ -115,11 +115,12 @@ export class CSVOracle implements XPOracle {
         let rawOwnership = 100.0; // default safe value
         let realTeamId = 0;
         let matchTeamId = 0;
+        let match: any = null;
         if (players.length > 0) {
           const expectedTeamId = teamMap[team.toLowerCase()];
           const expectedElementType = pos === 'GKP' ? 1 : pos === 'DEF' ? 2 : pos === 'MID' ? 3 : pos === 'FWD' ? 4 : 0;
           
-          let match = players.find(p => 
+          match = players.find(p => 
             (!expectedTeamId || !p.team || p.team === expectedTeamId) &&
             (!expectedElementType || !p.element_type || p.element_type === expectedElementType) &&
             (p.web_name?.toLowerCase() === playerName.toLowerCase() ||
@@ -160,15 +161,17 @@ export class CSVOracle implements XPOracle {
           fplId = syntheticId++;
         }
 
-        const teamId = teamMap[team.toLowerCase()] || realTeamId || 0;
+        const realTeamObj = realTeamId > 0 && teams ? teams.find(t => t.id === realTeamId) : null;
+        const effectiveTeamId = realTeamId > 0 ? realTeamId : (teamMap[team.toLowerCase()] || 0);
+        const effectiveTeamShort = realTeamObj ? realTeamObj.short_name : team;
 
         const adjustedMerit = meritScore;
 
-        if (!this.playerPositions[fplId] || matchTeamId === teamId) {
-          this.playerNames[fplId] = playerName;
-          this.playerPositions[fplId] = pos;
+        if (!this.playerPositions[fplId] || matchTeamId === effectiveTeamId) {
+          this.playerNames[fplId] = (match && (match.web_name || match.second_name)) ? match.web_name : playerName;
+          this.playerPositions[fplId] = (match && match.element_type) ? (match.element_type === 1 ? 'GKP' : match.element_type === 2 ? 'DEF' : match.element_type === 3 ? 'MID' : 'FWD') : pos;
           this.playerCosts[fplId] = cost;
-          this.playerTeams[fplId] = team;
+          this.playerTeams[fplId] = effectiveTeamShort;
         }
         
         if (!this.allIds.includes(fplId)) {
@@ -216,13 +219,13 @@ export class CSVOracle implements XPOracle {
         for (let step = 0; step < 15; step++) {
           const gw = nextEventId + step;
           
-          if (fixtures && fixtures.length > 0 && teamId > 0) {
-            const teamFixtures = fixtures.filter(f => f.event === gw && (f.team_h === teamId || f.team_a === teamId));
+          if (fixtures && fixtures.length > 0 && effectiveTeamId > 0) {
+            const teamFixtures = fixtures.filter(f => f.event === gw && (f.team_h === effectiveTeamId || f.team_a === effectiveTeamId));
             if (teamFixtures.length > 0) {
               let gwXP = 0;
               const decayFactor = Math.pow(0.9, step);
               teamFixtures.forEach(f => {
-                const fdr = f.team_h === teamId ? f.team_h_difficulty : f.team_a_difficulty;
+                const fdr = f.team_h === effectiveTeamId ? f.team_h_difficulty : f.team_a_difficulty;
                 const diffMultiplier = 1 + (3 - fdr) * 0.1;
                 gwXP += adjustedMerit * diffMultiplier * decayFactor;
               });
@@ -247,6 +250,30 @@ export class CSVOracle implements XPOracle {
         }
       }
     }
+    // Post-ingestion reconciliation: Ensure all official FPL players have authoritative team and position assignments
+    if (players && players.length > 0 && teams && teams.length > 0) {
+      const teamLookup: Record<number, string> = {};
+      teams.forEach(t => { teamLookup[t.id] = t.short_name; });
+      const posMap: Record<number, string> = { 1: 'GKP', 2: 'DEF', 3: 'MID', 4: 'FWD' };
+
+      players.forEach(p => {
+        if (p && p.id) {
+          if (p.team && teamLookup[p.team]) {
+            this.playerTeams[p.id] = teamLookup[p.team];
+          }
+          if (p.element_type && posMap[p.element_type]) {
+            this.playerPositions[p.id] = posMap[p.element_type];
+          }
+          if (p.now_cost !== undefined) {
+            this.playerCosts[p.id] = p.now_cost;
+          }
+          if (p.web_name) {
+            this.playerNames[p.id] = p.web_name;
+          }
+        }
+      });
+    }
+
     console.log(`[CSVOracle] Ingested expected points and metadata for ${Object.keys(this.xpMatrix).length} players.`);
   }
 

@@ -68,21 +68,21 @@ export class FPLService {
       { id: 3, name: "Bournemouth", short_name: "BOU", strength: 3 },
       { id: 4, name: "Brentford", short_name: "BRE", strength: 3 },
       { id: 5, name: "Brighton", short_name: "BHA", strength: 3 },
-      { id: 6, name: "Burnley", short_name: "BUR", strength: 2 },
-      { id: 7, name: "Chelsea", short_name: "CHE", strength: 4 },
+      { id: 6, name: "Chelsea", short_name: "CHE", strength: 4 },
+      { id: 7, name: "Coventry City", short_name: "COV", strength: 2 },
       { id: 8, name: "Crystal Palace", short_name: "CRY", strength: 3 },
       { id: 9, name: "Everton", short_name: "EVE", strength: 3 },
       { id: 10, name: "Fulham", short_name: "FUL", strength: 3 },
-      { id: 11, name: "Leeds", short_name: "LEE", strength: 2 },
-      { id: 12, name: "Liverpool", short_name: "LIV", strength: 5 },
-      { id: 13, name: "Man City", short_name: "MCI", strength: 5 },
-      { id: 14, name: "Man Utd", short_name: "MUN", strength: 4 },
-      { id: 15, name: "Newcastle", short_name: "NEW", strength: 4 },
-      { id: 16, name: "Nottm Forest", short_name: "NFO", strength: 3 },
-      { id: 17, name: "Spurs", short_name: "TOT", strength: 4 },
-      { id: 18, name: "Sunderland", short_name: "SUN", strength: 2 },
-      { id: 19, name: "West Ham", short_name: "WHU", strength: 3 },
-      { id: 20, name: "Wolves", short_name: "WOL", strength: 3 }
+      { id: 11, name: "Hull City", short_name: "HUL", strength: 2 },
+      { id: 12, name: "Ipswich Town", short_name: "IPS", strength: 2 },
+      { id: 13, name: "Leeds", short_name: "LEE", strength: 3 },
+      { id: 14, name: "Liverpool", short_name: "LIV", strength: 5 },
+      { id: 15, name: "Man City", short_name: "MCI", strength: 5 },
+      { id: 16, name: "Man Utd", short_name: "MUN", strength: 4 },
+      { id: 17, name: "Newcastle", short_name: "NEW", strength: 4 },
+      { id: 18, name: "Nott'm Forest", short_name: "NFO", strength: 3 },
+      { id: 19, name: "Spurs", short_name: "TOT", strength: 4 },
+      { id: 20, name: "Sunderland", short_name: "SUN", strength: 2 }
     ];
 
     const oracle = new CSVOracle('data/fplform_scraped.csv', [], 'safe', [], teams, 1);
@@ -285,6 +285,16 @@ export class FPLService {
     const excludedSet = new Set<number>(excludedPlayerIds);
     const optimalIds = solveOptimalSquad(oracle, nextEventId, budget, 8, riskMode, playerScores, lockedSet, excludedSet);
     const squad = scored.filter(p => optimalIds.includes(p.id));
+    
+    // Invariant verification: strictly maximum 3 players per team
+    const teamCounts: Record<string, number> = {};
+    squad.forEach(p => {
+      teamCounts[p.team_short_name] = (teamCounts[p.team_short_name] || 0) + 1;
+    });
+    const teamViolations = Object.entries(teamCounts).filter(([_, count]) => count > 3);
+    if (teamViolations.length > 0) {
+      console.error(`[Squad Invariant Violation] Teams exceeding 3-player limit:`, teamViolations);
+    }
     
     const sortByScore = (a: ScoredPlayer, b: ScoredPlayer) => (b.score || 0) - (a.score || 0);
     const gkps = squad.filter(p => p.position === "GKP").sort(sortByScore);

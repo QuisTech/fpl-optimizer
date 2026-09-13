@@ -29,7 +29,7 @@ export function solveOptimalSquad(oracle: XPOracle, gameweek: number, budget: nu
 
   allIds.forEach(id => {
     if (excludedIds && excludedIds.has(id)) return;
-    const team = oracle.getTeam(id);
+    const team = oracle.getTeam(id) || 'UNK';
     if (!model.constraints[`team_${team}`]) {
       model.constraints[`team_${team}`] = { max: 3 };
     }
@@ -116,7 +116,7 @@ export function solveOptimalTransfers(
   };
 
   allIds.forEach(id => {
-    const team = oracle.getTeam(id);
+    const team = oracle.getTeam(id) || 'UNK';
     if (!model.constraints[`team_${team}`]) {
       model.constraints[`team_${team}`] = { max: 3 };
     }
