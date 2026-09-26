@@ -742,3 +742,27 @@ describe('Simulator - Probabilistic Player Model & Expected Utility', () => {
     expect(resultsAggressHaaland[0].accumulatedScore).toBeGreaterThan(resultsAggressSalah[0].accumulatedScore);
   });
 });
+
+describe('FPLService - Captain and Vice Captain resolution', () => {
+  it('should mark isCaptain and isViceCaptain on recommendations and startingXI', async () => {
+    const recs = await FPLService.getRecommendations('safe', 1000);
+    expect(recs.captain).toBeDefined();
+    expect(recs.viceCaptain).toBeDefined();
+    expect(recs.captain.isCaptain).toBe(true);
+    expect(recs.viceCaptain.isViceCaptain).toBe(true);
+
+    const capInXI = recs.startingXI.find(p => p.id === recs.captain.id);
+    expect(capInXI).toBeDefined();
+    expect(capInXI?.isCaptain).toBe(true);
+
+    const vcInXI = recs.startingXI.find(p => p.id === recs.viceCaptain.id);
+    expect(vcInXI).toBeDefined();
+    expect(vcInXI?.isViceCaptain).toBe(true);
+
+    // Exactly one captain and one vice-captain
+    const totalCaptains = recs.startingXI.filter(p => p.isCaptain).length;
+    const totalViceCaptains = recs.startingXI.filter(p => p.isViceCaptain).length;
+    expect(totalCaptains).toBe(1);
+    expect(totalViceCaptains).toBe(1);
+  });
+});

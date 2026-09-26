@@ -56,6 +56,8 @@ export interface ScoredPlayer extends FPLPlayer {
   next_fixtures: { event?: number; opponent: string; difficulty: number; is_home?: boolean }[];
   isCaptain: boolean;
   isViceCaptain: boolean;
+  is_captain?: boolean;
+  is_vice_captain?: boolean;
   position_in_squad?: number;
   multiplier?: number;
   eo?: number;

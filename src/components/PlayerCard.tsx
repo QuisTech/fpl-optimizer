@@ -145,6 +145,9 @@ export const PlayerCard = ({
     right: "right-0 left-auto translate-x-0 sm:left-1/2 sm:-translate-x-1/2"
   }[tooltipAlignment];
 
+  const effectiveIsCaptain = Boolean(isCaptain || player.isCaptain || player.is_captain);
+  const effectiveIsViceCaptain = Boolean(!effectiveIsCaptain && (isViceCaptain || player.isViceCaptain || player.is_vice_captain));
+
   return (
     <div 
       ref={cardRef}
@@ -159,18 +162,18 @@ export const PlayerCard = ({
     >
 
       {/* Official Captain / Vice-Captain Circular Badge */}
-      {isCaptain && (
+      {effectiveIsCaptain && (
         <div 
           title="Captain (2x Points)"
-          className="absolute -top-1.5 -left-1 sm:-top-2 sm:-left-1.5 z-30 flex items-center justify-center w-4.5 h-4.5 sm:w-6 sm:h-6 rounded-full bg-[#37003c] text-white border-2 border-white/80 font-black text-[9px] sm:text-xs shadow-lg"
+          className="absolute -top-1.5 -left-1 sm:-top-2 sm:-left-1.5 z-30 flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-[#37003c] text-white border-2 border-white/90 font-black text-[10px] sm:text-xs shadow-lg"
         >
           C
         </div>
       )}
-      {isViceCaptain && !isCaptain && (
+      {effectiveIsViceCaptain && (
         <div 
           title="Vice Captain"
-          className="absolute -top-1.5 -left-1 sm:-top-2 sm:-left-1.5 z-30 flex items-center justify-center w-4.5 h-4.5 sm:w-6 sm:h-6 rounded-full bg-[#37003c] text-[#00ff87] border-2 border-white/80 font-black text-[8px] sm:text-[11px] shadow-lg flex items-center gap-0.5"
+          className="absolute -top-1.5 -left-1 sm:-top-2 sm:-left-1.5 z-30 flex items-center justify-center w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-900 text-[#00ff87] border-2 border-[#00ff87]/80 font-black text-[10px] sm:text-xs shadow-lg"
         >
           <span>V</span>
         </div>

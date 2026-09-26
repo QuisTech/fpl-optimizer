@@ -336,17 +336,37 @@ export class FPLService {
       return ((b.xP || 0) * bWeight) - ((a.xP || 0) * aWeight);
     });
     
+    const captain = captaincyCandidates[0] ? { ...captaincyCandidates[0], isCaptain: true, is_captain: true } : null;
+    const viceCaptain = captaincyCandidates[1] ? { ...captaincyCandidates[1], isViceCaptain: true, is_vice_captain: true } : null;
+
+    const flagPlayer = (p: ScoredPlayer): ScoredPlayer => {
+      const isCap = Boolean(captain && p.id === captain.id);
+      const isVc = Boolean(!isCap && viceCaptain && p.id === viceCaptain.id);
+      return {
+        ...p,
+        isCaptain: isCap,
+        is_captain: isCap,
+        isViceCaptain: isVc,
+        is_vice_captain: isVc
+      };
+    };
+
+    const flaggedSquad = squad.map(flagPlayer);
+    const flaggedStartingXI = startingXI.map(flagPlayer);
+    const flaggedBench = flaggedSquad.filter(p => !flaggedStartingXI.find(x => x.id === p.id)).sort((a, b) => {
+      if (a.position === 'GKP' && b.position !== 'GKP') return -1;
+      if (a.position !== 'GKP' && b.position === 'GKP') return 1;
+      return (b.score || 0) - (a.score || 0);
+    });
+
     return { 
-      squad, startingXI, 
-      bench: squad.filter(p => !startingXI.find(x => x.id === p.id)).sort((a, b) => {
-        if (a.position === 'GKP' && b.position !== 'GKP') return -1;
-        if (a.position !== 'GKP' && b.position === 'GKP') return 1;
-        return (b.score || 0) - (a.score || 0);
-      }),
-      captain: captaincyCandidates[0] || null,
-      viceCaptain: captaincyCandidates[1] || null,
-      expectedPoints: startingXI.reduce((sum, p) => sum + (p.xP || 0), 0),
-      totalCost: squad.reduce((sum, p) => sum + (p.now_cost || 0), 0),
+      squad: flaggedSquad, 
+      startingXI: flaggedStartingXI, 
+      bench: flaggedBench,
+      captain: captain as any,
+      viceCaptain: viceCaptain as any,
+      expectedPoints: flaggedStartingXI.reduce((sum, p) => sum + (p.xP || 0), 0),
+      totalCost: flaggedSquad.reduce((sum, p) => sum + (p.now_cost || 0), 0),
       topPicks: {
         gkp: scored.filter(p => p.position === "GKP").sort(sortByScore).slice(0, 5),
         def: scored.filter(p => p.position === "DEF").sort(sortByScore).slice(0, 5),

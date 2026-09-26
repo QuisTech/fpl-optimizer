@@ -68,6 +68,7 @@ export interface ScoredPlayer extends FPLPlayer {
   isCaptain?: boolean;
   is_captain?: boolean;
   isViceCaptain?: boolean;
+  is_vice_captain?: boolean;
   position_in_squad?: number;
   multiplier?: number;
   eo?: number;

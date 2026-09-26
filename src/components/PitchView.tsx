@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { PlayerCard } from './PlayerCard';
 import { RecommendationResponse, ScoredPlayer, TeamSyncResponse } from '../types';
@@ -68,31 +68,106 @@ export const PitchView = ({
 }: PitchViewProps) => {
   const [showFixtures, setShowFixtures] = useState(true);
   const [viewMode, setViewMode] = useState<'pitch' | 'list'>('pitch');
+  const [squadSource, setSquadSource] = useState<'optimal' | 'synced'>('optimal');
+
+  const hasSyncedSquad = Boolean(syncedData?.squad && syncedData.squad.length >= 11);
+  const isViewingSynced = hasSyncedSquad && squadSource === 'synced';
+
+  // Active Starting XI & Bench based on squadSource
+  const activeStartingXI: ScoredPlayer[] = useMemo(() => {
+    if (isViewingSynced && syncedData?.squad) {
+      return syncedData.squad.filter(p => (p.position_in_squad ?? 0) <= 11);
+    }
+    return data?.startingXI || [];
+  }, [isViewingSynced, syncedData, data]);
+
+  const activeBench: ScoredPlayer[] = useMemo(() => {
+    if (isViewingSynced && syncedData?.squad) {
+      return syncedData.squad
+        .filter(p => (p.position_in_squad ?? 0) >= 12)
+        .sort((a, b) => (a.position_in_squad ?? 0) - (b.position_in_squad ?? 0));
+    }
+    return data?.bench?.filter(Boolean) || [];
+  }, [isViewingSynced, syncedData, data]);
+
+  const activeFormation = useMemo(() => {
+    if (isViewingSynced) {
+      return {
+        gkp: activeStartingXI.filter(p => p.position === 'GKP'),
+        def: activeStartingXI.filter(p => p.position === 'DEF'),
+        mid: activeStartingXI.filter(p => p.position === 'MID'),
+        fwd: activeStartingXI.filter(p => p.position === 'FWD'),
+      };
+    }
+    return formation;
+  }, [isViewingSynced, activeStartingXI, formation]);
+
+  // Identify active Captain and Vice Captain
+  const activeCaptain = useMemo(() => {
+    if (isViewingSynced && syncedData?.squad) {
+      return syncedData.squad.find(p => p.isCaptain || p.is_captain) || (activeStartingXI.length > 0 ? activeStartingXI[0] : null);
+    }
+    return data?.captain || data?.startingXI?.find(p => p.isCaptain || p.is_captain) || null;
+  }, [isViewingSynced, syncedData, data, activeStartingXI]);
+
+  const activeViceCaptain = useMemo(() => {
+    if (isViewingSynced && syncedData?.squad) {
+      return syncedData.squad.find(p => p.isViceCaptain || p.is_vice_captain) || null;
+    }
+    return data?.viceCaptain || data?.startingXI?.find(p => p.isViceCaptain || p.is_vice_captain) || null;
+  }, [isViewingSynced, syncedData, data]);
+
+  const checkIsCaptain = (p: ScoredPlayer) => {
+    if (p.isCaptain || p.is_captain) return true;
+    if (activeCaptain && p.id === activeCaptain.id) return true;
+    return false;
+  };
+
+  const checkIsViceCaptain = (p: ScoredPlayer) => {
+    if (checkIsCaptain(p)) return false;
+    if (p.isViceCaptain || p.is_vice_captain) return true;
+    if (activeViceCaptain && p.id === activeViceCaptain.id) return true;
+    return false;
+  };
 
   const scenarioComp = (data as any)?.engineDiagnostics?.metrics?.scenarioComparison;
   const delta = scenarioComp?.delta;
 
   const allPlayersMap = new Map<number, ScoredPlayer>();
   data?.squad?.forEach(p => allPlayersMap.set(p.id, p));
+  syncedData?.squad?.forEach(p => allPlayersMap.set(p.id, p));
   data?.topPicks?.gkp?.forEach(p => allPlayersMap.set(p.id, p));
   data?.topPicks?.def?.forEach(p => allPlayersMap.set(p.id, p));
   data?.topPicks?.mid?.forEach(p => allPlayersMap.set(p.id, p));
   data?.topPicks?.fwd?.forEach(p => allPlayersMap.set(p.id, p));
 
   const hasConstraints = lockedPlayerIds.length > 0 || excludedPlayerIds.length > 0;
-  const benchPlayers = data?.bench?.filter(Boolean) || [];
+  const benchPlayers = activeBench;
 
   // Matchday & Squad Diagnostics Calculations
   const nextGw = (data as any)?.nextEventId || (syncedData as any)?.gameweek || 3;
-  const expectedPoints = data?.expectedPoints || data?.startingXI?.reduce((s, p) => s + (p.xP || 0), 0) || 0;
+  const captainBonus = activeCaptain ? (activeCaptain.xP || 0) : 0;
+  const expectedPoints = useMemo(() => {
+    if (isViewingSynced) {
+      const base = activeStartingXI.reduce((s, p) => s + (p.xP || p.score || 0), 0);
+      return Math.round((base + captainBonus) * 10) / 10;
+    }
+    return data?.expectedPoints || (activeStartingXI.reduce((s, p) => s + (p.xP || 0), 0) + captainBonus);
+  }, [isViewingSynced, activeStartingXI, captainBonus, data]);
+
   const avgEo = (data as any)?.engineDiagnostics?.metrics?.averageXiEo ?? (
-    data?.startingXI && data.startingXI.length > 0 
-      ? Math.round(data.startingXI.reduce((s, p) => s + (p.eo || 0), 0) / data.startingXI.length) 
+    activeStartingXI && activeStartingXI.length > 0 
+      ? Math.round(activeStartingXI.reduce((s, p) => s + (p.eo || 0), 0) / activeStartingXI.length) 
       : 0
   );
-  const totalCost = data?.totalCost ? (data.totalCost / 10).toFixed(1) : '100.0';
+  const totalCost = useMemo(() => {
+    if (isViewingSynced && syncedData?.totalCost) {
+      return (syncedData.totalCost / 10).toFixed(1);
+    }
+    return data?.totalCost ? (data.totalCost / 10).toFixed(1) : '100.0';
+  }, [isViewingSynced, syncedData, data]);
+
   const bank = syncedData?.bank !== undefined ? (syncedData.bank / 10).toFixed(1) : '0.0';
-  const captain = data?.captain?.web_name || data?.startingXI?.find(p => p.isCaptain)?.web_name || 'TBD';
   const entryHistory = syncedData?.entryHistory;
   const managerInfo = syncedData?.managerInfo;
 
@@ -183,21 +258,31 @@ export const PitchView = ({
               Gameweek {nextGw}
             </span>
             <span className="text-[10px] sm:text-xs font-bold text-white truncate">
-              {managerInfo?.teamName ? managerInfo.teamName : (activeScenario === 'template' ? 'Risky Template Shield' : 'FPL Optimizer Lineup')}
+              {isViewingSynced && managerInfo?.teamName
+                ? managerInfo.teamName
+                : activeScenario === 'template'
+                  ? 'Risky Template Shield'
+                  : 'AI Optimal Lineup'}
             </span>
           </div>
 
           {/* Captain & Status Banner */}
           <div className="flex items-center justify-between sm:justify-end gap-1.5 text-[9px] font-mono">
-            {managerInfo?.managerName && (
+            {managerInfo?.managerName && isViewingSynced && (
               <span className="bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-slate-300 hidden md:inline-block">
                 {managerInfo.managerName}
               </span>
             )}
-            <span className="bg-slate-900/90 border border-slate-800 px-2 py-0.5 rounded text-emerald-400 font-bold flex items-center gap-1">
+            <span className="bg-slate-900/90 border border-slate-800 px-2 py-0.5 rounded text-emerald-400 font-bold flex items-center gap-1 shadow-sm">
               <span className="w-3.5 h-3.5 rounded-full bg-[#37003c] text-white flex items-center justify-center text-[7.5px] font-black border border-white/60">C</span>
-              {captain}
+              {activeCaptain?.web_name || 'TBD'}
             </span>
+            {activeViceCaptain && (
+              <span className="bg-slate-900/90 border border-slate-800 px-2 py-0.5 rounded text-slate-300 font-bold flex items-center gap-1 shadow-sm">
+                <span className="w-3.5 h-3.5 rounded-full bg-slate-800 text-[#00ff87] flex items-center justify-center text-[7.5px] font-black border border-slate-600">V</span>
+                {activeViceCaptain.web_name}
+              </span>
+            )}
           </div>
         </div>
 
@@ -312,7 +397,7 @@ export const PitchView = ({
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-1 max-w-2xl sm:max-w-4xl mx-auto w-full">
         <div className="flex items-center gap-2">
           <span className="bg-slate-900 border border-slate-800 text-slate-300 font-mono font-bold text-[10px] sm:text-xs px-2.5 py-1 rounded-lg uppercase tracking-wider">
-            {formation.def.length}-{formation.mid.length}-{formation.fwd.length} Formation
+            {activeFormation.def.length}-{activeFormation.mid.length}-{activeFormation.fwd.length} Formation
           </span>
           <span className="text-slate-600 hidden sm:inline">•</span>
           <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
@@ -321,6 +406,35 @@ export const PitchView = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {hasSyncedSquad && (
+            <div className="flex items-center gap-1 bg-slate-900/95 p-1 rounded-lg border border-slate-800 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setSquadSource('optimal')}
+                className={cn(
+                  "flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all",
+                  squadSource === 'optimal'
+                    ? "bg-fpl-green text-slate-950 shadow-[0_0_10px_rgba(0,255,133,0.35)]"
+                    : "text-slate-400 hover:text-slate-200"
+                )}
+              >
+                Optimal XI
+              </button>
+              <button
+                type="button"
+                onClick={() => setSquadSource('synced')}
+                className={cn(
+                  "flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all",
+                  squadSource === 'synced'
+                    ? "bg-purple-600 text-white shadow-[0_0_10px_rgba(168,85,247,0.35)]"
+                    : "text-slate-400 hover:text-slate-200"
+                )}
+              >
+                My Squad
+              </button>
+            </div>
+          )}
+
           {/* Official FPL Pitch / List Switcher (Segmented Radio Button Group) */}
           <div className="flex items-center gap-1 bg-slate-900/95 p-1 rounded-lg border border-slate-800 shadow-inner" role="radiogroup" aria-label="Lineup view format">
             <button
@@ -503,13 +617,13 @@ export const PitchView = ({
               
               {/* Row 1: Goalkeeper (Inside Goalmouth & 18-Yard Box) */}
               <div className="flex justify-center items-center w-full my-0 sm:my-0.5">
-                {formation.gkp.map(p => (
+                {activeFormation.gkp.map(p => (
                   <PlayerCard 
                     key={p.id} 
                     player={p} 
                     showFixtures={showFixtures}
-                    isCaptain={p.isCaptain}
-                    isViceCaptain={p.isViceCaptain}
+                    isCaptain={checkIsCaptain(p)}
+                    isViceCaptain={checkIsViceCaptain(p)}
                     isLocked={lockedPlayerIds.includes(p.id)}
                     isExcluded={excludedPlayerIds.includes(p.id)}
                     onToggleLock={onToggleLock}
@@ -520,13 +634,13 @@ export const PitchView = ({
 
               {/* Row 2: Defenders (Upper Pitch between Penalty Box & Midfield) */}
               <div className="flex justify-around items-center w-full max-w-[88%] mx-auto my-0 sm:my-0.5">
-                {formation.def.map(p => (
+                {activeFormation.def.map(p => (
                   <PlayerCard 
                     key={p.id} 
                     player={p} 
                     showFixtures={showFixtures}
-                    isCaptain={p.isCaptain}
-                    isViceCaptain={p.isViceCaptain}
+                    isCaptain={checkIsCaptain(p)}
+                    isViceCaptain={checkIsViceCaptain(p)}
                     isLocked={lockedPlayerIds.includes(p.id)}
                     isExcluded={excludedPlayerIds.includes(p.id)}
                     onToggleLock={onToggleLock}
@@ -537,13 +651,13 @@ export const PitchView = ({
 
               {/* Row 3: Midfielders (Wider Middle Pitch above Halfway Line) */}
               <div className="flex justify-around items-center w-full max-w-[98%] mx-auto my-0 sm:my-0.5">
-                {formation.mid.map(p => (
+                {activeFormation.mid.map(p => (
                   <PlayerCard 
                     key={p.id} 
                     player={p} 
                     showFixtures={showFixtures}
-                    isCaptain={p.isCaptain}
-                    isViceCaptain={p.isViceCaptain}
+                    isCaptain={checkIsCaptain(p)}
+                    isViceCaptain={checkIsViceCaptain(p)}
                     isLocked={lockedPlayerIds.includes(p.id)}
                     isExcluded={excludedPlayerIds.includes(p.id)}
                     onToggleLock={onToggleLock}
@@ -554,13 +668,13 @@ export const PitchView = ({
 
               {/* Row 4: Forwards (Inside the Center Circle & Over Halfway Line) */}
               <div className="flex justify-around items-center w-full max-w-[80%] mx-auto my-0 sm:my-0.5">
-                {formation.fwd.map(p => (
+                {activeFormation.fwd.map(p => (
                   <PlayerCard 
                     key={p.id} 
                     player={p} 
                     showFixtures={showFixtures}
-                    isCaptain={p.isCaptain}
-                    isViceCaptain={p.isViceCaptain}
+                    isCaptain={checkIsCaptain(p)}
+                    isViceCaptain={checkIsViceCaptain(p)}
                     isLocked={lockedPlayerIds.includes(p.id)}
                     isExcluded={excludedPlayerIds.includes(p.id)}
                     onToggleLock={onToggleLock}
@@ -594,6 +708,8 @@ export const PitchView = ({
                           compact 
                           benchIndex={idx}
                           showFixtures={showFixtures}
+                          isCaptain={checkIsCaptain(p)}
+                          isViceCaptain={checkIsViceCaptain(p)}
                           isLocked={lockedPlayerIds.includes(p.id)}
                           isExcluded={excludedPlayerIds.includes(p.id)}
                           onToggleLock={onToggleLock}
@@ -633,12 +749,12 @@ export const PitchView = ({
                   Starting XI
                 </span>
                 <span className="text-[10px] font-mono bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-bold border border-slate-700">
-                  {formation.gkp.length + formation.def.length + formation.mid.length + formation.fwd.length} Players
+                  {activeStartingXI.length} Players
                 </span>
               </div>
               <div className="flex items-center gap-3 text-[10px] sm:text-xs font-mono">
                 <span className="text-slate-400">
-                  Cost: <span className="text-slate-200 font-bold">£{((formation.gkp.concat(formation.def, formation.mid, formation.fwd).reduce((sum, p) => sum + (p.now_cost || (p as any).cost || 0), 0)) / 10).toFixed(1)}M</span>
+                  Cost: <span className="text-slate-200 font-bold">£{((activeStartingXI.reduce((sum, p) => sum + (p.now_cost || (p as any).cost || 0), 0)) / 10).toFixed(1)}M</span>
                 </span>
                 <span className="text-slate-600">•</span>
                 <span className="text-slate-400">
@@ -665,7 +781,7 @@ export const PitchView = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/40 text-xs">
-                  {[...formation.gkp, ...formation.def, ...formation.mid, ...formation.fwd].map(p => {
+                  {[...activeFormation.gkp, ...activeFormation.def, ...activeFormation.mid, ...activeFormation.fwd].map(p => {
                     const isLocked = lockedPlayerIds.includes(p.id);
                     const isExcluded = excludedPlayerIds.includes(p.id);
                     const nextFix = p.next_fixtures?.[0];
@@ -692,12 +808,12 @@ export const PitchView = ({
                             <div className="flex flex-col">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-bold text-white text-xs sm:text-sm">{p.web_name}</span>
-                                {p.isCaptain && (
+                                {checkIsCaptain(p) && (
                                   <span className="w-4 h-4 rounded-full bg-[#37003c] text-white flex items-center justify-center text-[9px] font-black border border-white/70 shadow-sm" title="Captain (2x Points)">
                                     C
                                   </span>
                                 )}
-                                {p.isViceCaptain && (
+                                {checkIsViceCaptain(p) && (
                                   <span className="w-4 h-4 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center text-[9px] font-black border border-slate-600" title="Vice Captain">
                                     V
                                   </span>
@@ -752,9 +868,9 @@ export const PitchView = ({
                         {/* Immediate GW xP */}
                         <td className="py-2.5 px-3 text-right whitespace-nowrap">
                           <span className="font-mono font-black text-xs sm:text-sm text-fpl-green">
-                            {p.isCaptain ? ((p.xP || 0) * 2).toFixed(1) : (p.xP || 0).toFixed(1)}
+                            {checkIsCaptain(p) ? ((p.xP || 0) * 2).toFixed(1) : (p.xP || 0).toFixed(1)}
                           </span>
-                          {p.isCaptain && <span className="text-[9px] text-fpl-green/80 ml-1 font-mono">(2x)</span>}
+                          {checkIsCaptain(p) && <span className="text-[9px] text-fpl-green/80 ml-1 font-mono">(2x)</span>}
                         </td>
 
                         {/* 8-GW Horizon xP */}
@@ -888,6 +1004,16 @@ export const PitchView = ({
                             <div className="flex flex-col">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-bold text-white text-xs sm:text-sm">{p.web_name}</span>
+                                {checkIsCaptain(p) && (
+                                  <span className="w-4 h-4 rounded-full bg-[#37003c] text-white flex items-center justify-center text-[9px] font-black border border-white/70 shadow-sm" title="Captain (2x Points)">
+                                    C
+                                  </span>
+                                )}
+                                {checkIsViceCaptain(p) && (
+                                  <span className="w-4 h-4 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center text-[9px] font-black border border-slate-600" title="Vice Captain">
+                                    V
+                                  </span>
+                                )}
                                 {p.chance_of_playing_next_round !== undefined && p.chance_of_playing_next_round !== null && p.chance_of_playing_next_round < 100 && (
                                   <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[8px] font-mono px-1 rounded font-bold">
                                     {p.chance_of_playing_next_round}%
