@@ -365,7 +365,7 @@ export class FPLService {
       bench: flaggedBench,
       captain: captain as any,
       viceCaptain: viceCaptain as any,
-      expectedPoints: flaggedStartingXI.reduce((sum, p) => sum + (p.xP || 0), 0),
+      expectedPoints: flaggedStartingXI.reduce((sum, p) => sum + (p.xP || 0), 0) + (captain ? (captain.xP || 0) : 0),
       totalCost: flaggedSquad.reduce((sum, p) => sum + (p.now_cost || 0), 0),
       topPicks: {
         gkp: scored.filter(p => p.position === "GKP").sort(sortByScore).slice(0, 5),
@@ -514,7 +514,7 @@ export class FPLService {
       const baseMapped = this.mapToScoredPlayer(player, baseData.teams, baseData.fixtures, baseData.nextEventId, riskMode, oracle);
       return {
         ...baseMapped,
-        xP: Math.round(baseMapped.score * 10) / 10,
+        xP: Math.round((baseMapped.xP ?? baseMapped.score) * 10) / 10,
         eo: oracle.getTop1kEO?.(player.id) ?? 0,
         ownership: oracle.getTop1kOwnership?.(player.id) ?? parseFloat(player.selected_by_percent || "0") ?? 0,
         isCaptain: p.is_captain,

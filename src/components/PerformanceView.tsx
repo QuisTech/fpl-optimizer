@@ -152,13 +152,13 @@ export const PerformanceView = ({ history, fetchLivePoints, reconcileUserSquad, 
     };
 
     const resolveXp = (item: any, modeKey: string) => {
-      if (item && typeof item.xP === 'number' && item.xP > 0) return item.xP;
+      if (item && typeof item.xP === 'number' && item.xP > 0 && item.xP <= 95) return item.xP;
       // Look for sibling composite key with valid xP
       const fallbackKey = keys.find(k => k.includes(modeKey) && typeof gwData[k]?.xP === 'number' && gwData[k]?.xP > 0);
       if (fallbackKey) return gwData[fallbackKey].xP;
       // Fallback: calculate from players' scores/xP
       if (item?.players && item.players.length > 0) {
-        const sum = item.players.reduce((acc: number, p: any) => acc + (p.score || p.xP || 0), 0);
+        const sum = item.players.reduce((acc: number, p: any) => { const val = typeof p.xP === 'number' && p.xP > 0 ? p.xP : (typeof p.score === 'number' && p.score > 20 ? p.score * 0.5 : (p.score || 0)); return acc + val; }, 0);
         const captain = item.players.find((p: any) => p.id === item.captainId);
         const bonus = captain ? (captain.score || captain.xP || 0) : 0;
         const total = sum + bonus;
