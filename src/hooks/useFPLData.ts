@@ -32,7 +32,17 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
   const effectiveKey = teamId ? `team_${teamId.trim()}` : userId;
 
   const [history, setHistory] = useState<any>(() => {
-    const saved = localStorage.getItem('fpl_optimizer_history') || localStorage.getItem('fpl_strategist_history') || localStorage.getItem('fpl_optimizer_history');
+    const saved = localStorage.getItem('fpl_optimizer_history');
+    if (saved) return JSON.parse(saved);
+    const legacySaved = localStorage.getItem('fpl_strategist_history') || localStorage.getItem('fpl_horizon_history');
+    if (legacySaved) {
+      try {
+        const parsed = JSON.parse(legacySaved);
+        localStorage.setItem('fpl_optimizer_history', legacySaved);
+        return parsed;
+      } catch (e) {}
+    }
+    return {};
     return saved ? JSON.parse(saved) : {};
   });
 
@@ -41,7 +51,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
   }, [history]);
 
   useEffect(() => {
-    axios.get(`/api/snapshots?userId=${effectiveKey}`)
+    axios.get(`/api/snapshots?userId=${effectiveKey}&appId=fpl-optimizer`)
       .then(res => {
         if (res.data?.history && typeof res.data.history === 'object' && Object.keys(res.data.history).length > 0) {
           setHistory((prev: any) => {
@@ -195,7 +205,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
       setHistory({ ...newHistory });
       localStorage.setItem('fpl_optimizer_history', JSON.stringify(newHistory));
 
-      axios.post('/api/snapshots', { userId: effectiveKey, history: newHistory })
+      axios.post('/api/snapshots', { userId: effectiveKey, appId: 'fpl-optimizer', history: newHistory })
         .catch(err => console.warn("[Snapshots API] Post notice:", err));
     } catch (fetchErr) {
       console.warn("[Snapshot] Error capturing other modes:", fetchErr);
@@ -228,7 +238,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
       setError(null);
 
       // Fetch team snapshots from cloud backend
-      axios.get(`/api/snapshots?userId=team_${targetTeamId.trim()}`)
+      axios.get(`/api/snapshots?userId=team_${targetTeamId.trim()}&appId=fpl-optimizer`)
         .then(snapRes => {
           if (snapRes.data?.history && typeof snapRes.data.history === 'object') {
             setHistory((prev: any) => ({ ...prev, ...snapRes.data.history }));
@@ -361,7 +371,7 @@ export const useFPLData = (riskMode: 'safe' | 'aggressive' | 'value') => {
       localStorage.setItem('fpl_optimizer_history', JSON.stringify(currentHistory));
 
       const effectiveKey = effectiveTeamId.startsWith('team_') ? effectiveTeamId : `team_${effectiveTeamId}`;
-      axios.post('/api/snapshots', { userId: effectiveKey, history: currentHistory })
+      axios.post('/api/snapshots', { userId: effectiveKey, appId: 'fpl-optimizer', history: currentHistory })
         .catch(err => console.warn("[Snapshots API] Post notice:", err));
 
       return true;

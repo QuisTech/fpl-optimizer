@@ -12,7 +12,10 @@ export default async function handler(req: Request, res: Response) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const userId = (req.query.userId as string) || (req.body?.userId as string) || 'default_user';
+  const rawUserId = (req.query.userId as string) || (req.body?.userId as string) || 'default_user';
+  const appId = (req.query.appId as string) || (req.body?.appId as string) || '';
+  const docKey = appId ? `${appId}_${rawUserId}` : rawUserId;
+  const memoryKey = docKey;
 
   try {
     const db = getFirestore();
@@ -20,16 +23,16 @@ export default async function handler(req: Request, res: Response) {
     if (req.method === 'GET') {
       if (db) {
         try {
-          const doc = await db.collection('user_snapshots').doc(userId).get();
+          const doc = await db.collection('user_snapshots').doc(docKey).get();
           if (doc.exists && doc.data()?.history) {
             return res.json({ history: doc.data()?.history, source: 'firestore' });
           }
         } catch (dbErr: any) {
           console.error("Firestore GET error:", dbErr);
-          return res.json({ history: memorySnapshotStore[userId] || {}, source: 'memory_fallback', error: dbErr.message });
+          return res.json({ history: memorySnapshotStore[memoryKey] || {}, source: 'memory_fallback', error: dbErr.message });
         }
       }
-      return res.json({ history: memorySnapshotStore[userId] || {}, source: db ? 'firestore_empty' : 'memory_no_db' });
+      return res.json({ history: memorySnapshotStore[memoryKey] || {}, source: db ? 'firestore_empty' : 'memory_no_db' });
     }
 
     if (req.method === 'POST') {
@@ -38,8 +41,8 @@ export default async function handler(req: Request, res: Response) {
         return res.status(400).json({ error: "Invalid history payload" });
       }
 
-      memorySnapshotStore[userId] = {
-        ...(memorySnapshotStore[userId] || {}),
+      memorySnapshotStore[memoryKey] = {
+        ...(memorySnapshotStore[memoryKey] || {}),
         ...history
       };
 
@@ -48,8 +51,8 @@ export default async function handler(req: Request, res: Response) {
 
       if (db) {
         try {
-          await db.collection('user_snapshots').doc(userId).set({
-            history: memorySnapshotStore[userId],
+          await db.collection('user_snapshots').doc(docKey).set({
+            history: memorySnapshotStore[memoryKey],
             updatedAt: new Date()
           }, { merge: true });
           firestoreSynced = true;
@@ -61,7 +64,7 @@ export default async function handler(req: Request, res: Response) {
 
       return res.json({ 
         success: true, 
-        history: memorySnapshotStore[userId], 
+        history: memorySnapshotStore[memoryKey], 
         source: firestoreSynced ? 'firestore' : 'memory',
         ...(syncError ? { warning: syncError } : {}) 
       });
@@ -70,6 +73,6 @@ export default async function handler(req: Request, res: Response) {
     return res.status(405).json({ error: "Method not allowed" });
   } catch (error: any) {
     console.error("Snapshots API Error:", error);
-    return res.json({ history: memorySnapshotStore[userId] || {}, error: error.message });
+    return res.json({ history: memorySnapshotStore[memoryKey] || {}, error: error.message });
   }
 }

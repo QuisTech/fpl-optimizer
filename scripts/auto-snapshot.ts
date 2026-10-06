@@ -39,8 +39,8 @@ export async function runAutoSnapshots(overrideGwId?: number) {
   try {
     const snapshotDocs = await db.collection('user_snapshots').get();
     snapshotDocs.forEach(doc => {
-      if (doc.id.startsWith('team_')) {
-        const tid = doc.id.replace('team_', '').trim();
+      if (doc.id.startsWith('fpl-optimizer_team_') || doc.id.startsWith('team_')) {
+        const tid = doc.id.replace('fpl-optimizer_team_', '').replace('team_', '').trim();
         if (tid && !teamIdList.includes(tid)) {
           teamIdList.push(tid);
         }
@@ -59,7 +59,7 @@ export async function runAutoSnapshots(overrideGwId?: number) {
   let successCount = 0;
 
   for (const tid of teamIdList) {
-    const docKey = `team_${tid}`;
+    const docKey = `fpl-optimizer_team_${tid}`;
     try {
       const docRef = db.collection('user_snapshots').doc(docKey);
       const docSnap = await docRef.get();
