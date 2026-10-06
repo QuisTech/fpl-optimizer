@@ -14,6 +14,7 @@ export default async function handler(req: Request, res: Response) {
 
   const rawUserId = (req.query.userId as string) || (req.body?.userId as string) || 'default_user';
   const appId = (req.query.appId as string) || (req.body?.appId as string) || '';
+
   const docKey = appId ? `${appId}_${rawUserId}` : rawUserId;
   const memoryKey = docKey;
 
@@ -23,16 +24,36 @@ export default async function handler(req: Request, res: Response) {
     if (req.method === 'GET') {
       if (db) {
         try {
+          // 1. Try fetching decoupled document key (e.g. fpl-horizon_team_12345)
           const doc = await db.collection('user_snapshots').doc(docKey).get();
-          if (doc.exists && doc.data()?.history) {
+          if (doc.exists && doc.data()?.history && Object.keys(doc.data()?.history || {}).length > 0) {
             return res.json({ history: doc.data()?.history, source: 'firestore' });
+          }
+
+          // 2. Fallback: If decoupled docKey doesn't exist yet, check legacy rawUserId doc (e.g. team_12345)
+          if (docKey !== rawUserId) {
+            const legacyDoc = await db.collection('user_snapshots').doc(rawUserId).get();
+            if (legacyDoc.exists && legacyDoc.data()?.history && Object.keys(legacyDoc.data()?.history || {}).length > 0) {
+              const legacyHistory = legacyDoc.data()?.history;
+              memorySnapshotStore[memoryKey] = { ...legacyHistory, ...(memorySnapshotStore[memoryKey] || {}) };
+              
+              // Seed decoupled Firestore document for future isolated calls
+              db.collection('user_snapshots').doc(docKey).set({
+                history: legacyHistory,
+                updatedAt: new Date()
+              }, { merge: true }).catch(err => console.warn("[Snapshot Migration] Notice:", err));
+
+              return res.json({ history: legacyHistory, source: 'firestore_migrated' });
+            }
           }
         } catch (dbErr: any) {
           console.error("Firestore GET error:", dbErr);
-          return res.json({ history: memorySnapshotStore[memoryKey] || {}, source: 'memory_fallback', error: dbErr.message });
+          const fallbackMemory = memorySnapshotStore[memoryKey] || memorySnapshotStore[rawUserId] || {};
+          return res.json({ history: fallbackMemory, source: 'memory_fallback', error: dbErr.message });
         }
       }
-      return res.json({ history: memorySnapshotStore[memoryKey] || {}, source: db ? 'firestore_empty' : 'memory_no_db' });
+      const fallbackMemory = memorySnapshotStore[memoryKey] || memorySnapshotStore[rawUserId] || {};
+      return res.json({ history: fallbackMemory, source: db ? 'firestore_empty' : 'memory_no_db' });
     }
 
     if (req.method === 'POST') {
@@ -73,6 +94,7 @@ export default async function handler(req: Request, res: Response) {
     return res.status(405).json({ error: "Method not allowed" });
   } catch (error: any) {
     console.error("Snapshots API Error:", error);
-    return res.json({ history: memorySnapshotStore[memoryKey] || {}, error: error.message });
+    const fallbackMemory = memorySnapshotStore[memoryKey] || memorySnapshotStore[rawUserId] || {};
+    return res.json({ history: fallbackMemory, error: error.message });
   }
 }
